@@ -36,8 +36,12 @@ def temp_tables():
 
 @pytest.fixture
 def client(temp_tables):
-    texthooking_page.app.config["TESTING"] = True
-    return texthooking_page.app.test_client()
+    app = texthooking_page.app
+    # register_routes() runs at backend startup, not on import; register once for the test app.
+    if "review_page" not in app.view_functions:
+        session_review_api.register_session_review_routes(app)
+    app.config["TESTING"] = True
+    return app.test_client()
 
 
 def _configured(monkeypatch):
@@ -93,17 +97,26 @@ def test_run_review_job_persists_result(monkeypatch):
     monkeypatch.setattr(session_review_api, "_review_lines", lambda r: [])
 
     class FakeGen:
-        ai = SimpleNamespace(config_snapshot=SimpleNamespace(ai=SimpleNamespace(provider="OpenAI")), _get_model_for_provider=lambda cfg: "m")
+        ai = SimpleNamespace(
+            config_snapshot=SimpleNamespace(ai=SimpleNamespace(provider="OpenAI")),
+            _get_model_for_provider=lambda cfg: "m",
+        )
 
         def run(self, lines, title, progress=None, question_count=None):
             progress("digest", "1/1")
             return SimpleNamespace(
                 to_dict=lambda: {
-                    "summary_ja": "要約", "summary_en": "Summary", "highlights": [{"quote": "x"}],
-                    "quiz": [{"id": "q1-1", "question_ja": "?"}], "characters": [], "may_have_missed_ja": ["a"],
+                    "summary_ja": "要約",
+                    "summary_en": "Summary",
+                    "highlights": [{"quote": "x"}],
+                    "quiz": [{"id": "q1-1", "question_ja": "?"}],
+                    "characters": [],
+                    "may_have_missed_ja": ["a"],
                     "may_have_missed_en": ["b"],
                 },
-                line_count=1, char_count=5, quiz=[1],
+                line_count=1,
+                char_count=5,
+                quiz=[1],
             )
 
     monkeypatch.setattr(session_review_api, "build_generator", lambda logger: FakeGen())
@@ -124,7 +137,9 @@ def test_run_review_job_records_failure(monkeypatch):
         def run(self, *a, **k):
             raise session_review_api.SessionReviewError("no JSON")
 
-        ai = SimpleNamespace(config_snapshot=SimpleNamespace(ai=SimpleNamespace(provider="p")), _get_model_for_provider=lambda c: "m")
+        ai = SimpleNamespace(
+            config_snapshot=SimpleNamespace(ai=SimpleNamespace(provider="p")), _get_model_for_provider=lambda c: "m"
+        )
 
     monkeypatch.setattr(session_review_api, "build_generator", lambda logger: Boom())
     session_review_api.run_review_job(review.id)
@@ -135,7 +150,11 @@ def test_run_review_job_records_failure(monkeypatch):
 def test_grade_stores_attempt(client, monkeypatch):
     _configured(monkeypatch)
     review = SessionReviewsTable(
-        game_key="g1", game_name="Game", start_ts=0, end_ts=10, status="done",
+        game_key="g1",
+        game_name="Game",
+        start_ts=0,
+        end_ts=10,
+        status="done",
         quiz=[{"id": "q1-1", "kind": "events", "question_ja": "?", "source_line_ids": ["missing"]}],
     )
     review.save()
@@ -143,7 +162,9 @@ def test_grade_stores_attempt(client, monkeypatch):
     class FakeGen:
         def grade_answer(self, question, answer, source_lines, title):
             assert question.id == "q1-1" and answer == "答え" and source_lines == []
-            return SimpleNamespace(verdict="correct", score=100, feedback_ja="", feedback_en="", japanese_fixes=[], model_answer_ja="")
+            return SimpleNamespace(
+                verdict="correct", score=100, feedback_ja="", feedback_en="", japanese_fixes=[], model_answer_ja=""
+            )
 
     monkeypatch.setattr(session_review_api, "build_generator", lambda logger: FakeGen())
     monkeypatch.setattr(session_review_api.GameLinesTable, "get", classmethod(lambda cls, lid: None))
@@ -159,10 +180,16 @@ def test_grade_rejects_unknown_question_and_unready_review(client, monkeypatch):
     _configured(monkeypatch)
     review = SessionReviewsTable(game_key="g1", start_ts=0, end_ts=10, status="done", quiz=[{"id": "q1-1"}])
     review.save()
-    assert client.post(f"/api/review/reviews/{review.id}/grade", json={"question_id": "nope", "answer": "x"}).status_code == 404
+    assert (
+        client.post(f"/api/review/reviews/{review.id}/grade", json={"question_id": "nope", "answer": "x"}).status_code
+        == 404
+    )
     running = SessionReviewsTable(game_key="g1", start_ts=0, end_ts=10, status="running")
     running.save()
-    assert client.post(f"/api/review/reviews/{running.id}/grade", json={"question_id": "q1-1", "answer": "x"}).status_code == 404
+    assert (
+        client.post(f"/api/review/reviews/{running.id}/grade", json={"question_id": "q1-1", "answer": "x"}).status_code
+        == 404
+    )
 
 
 def test_review_page_renders(client):

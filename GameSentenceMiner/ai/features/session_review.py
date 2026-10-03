@@ -208,7 +208,9 @@ def _question_from_dict(data: dict, fallback_id: str) -> Optional[QuizQuestion]:
 
 
 class SessionReviewGenerator:
-    def __init__(self, ai_service, native_language: str = "English", logger=None, chunk_chars: int = DEFAULT_CHUNK_CHARS):
+    def __init__(
+        self, ai_service, native_language: str = "English", logger=None, chunk_chars: int = DEFAULT_CHUNK_CHARS
+    ):
         self.ai = ai_service
         self.native_language = native_language
         self.logger = logger

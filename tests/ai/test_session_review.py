@@ -47,8 +47,14 @@ def test_quiz_question_count_scales_with_characters(chars, expected):
 
 
 def test_prompt_render_keeps_json_braces_and_dialogue_braces():
-    text = prompts.render(prompts.GRADE_PROMPT, **prompts.common_values("English"), game_title="G",
-                          question='{"id": "q1"}', source_lines="[l1] {笑}", answer="はい")
+    text = prompts.render(
+        prompts.GRADE_PROMPT,
+        **prompts.common_values("English"),
+        game_title="G",
+        question='{"id": "q1"}',
+        source_lines="[l1] {笑}",
+        answer="はい",
+    )
     assert '"verdict": "correct|partial|incorrect"' in text
     assert "[l1] {笑}" in text
     assert "{native_language}" not in text and "{data_guard}" not in text
@@ -93,10 +99,18 @@ class _FakeAI:
                     "summary_en": "Overall summary",
                     "characters": [{"name": "A", "attitude_ja": "強気", "attitude_en": "assertive"}],
                     "highlights": [
-                        {"line_id": "l0", "quote": "落ちそうになった", "construction": "〜そうになる",
-                         "naive_reading_ja": "x", "naive_reading_en": "y", "correct_reading_ja": "z",
-                         "correct_reading_en": "w", "why_it_matters_en": "v", "category": "aspect_modality",
-                         "confidence": "0.9"}
+                        {
+                            "line_id": "l0",
+                            "quote": "落ちそうになった",
+                            "construction": "〜そうになる",
+                            "naive_reading_ja": "x",
+                            "naive_reading_en": "y",
+                            "correct_reading_ja": "z",
+                            "correct_reading_en": "w",
+                            "why_it_matters_en": "v",
+                            "category": "aspect_modality",
+                            "confidence": "0.9",
+                        }
                     ],
                     "may_have_missed_ja": ["点"],
                     "may_have_missed_en": ["point"],
@@ -108,17 +122,28 @@ class _FakeAI:
             return json.dumps(
                 {
                     "questions": [
-                        {"id": f"{prefix}{i + 1}", "kind": "events", "question_ja": f"質問{prefix}{i + 1}",
-                         "reference_answer_ja": "答え", "rubric_en": ["fact"], "source_line_ids": ["l0"]}
+                        {
+                            "id": f"{prefix}{i + 1}",
+                            "kind": "events",
+                            "question_ja": f"質問{prefix}{i + 1}",
+                            "reference_answer_ja": "答え",
+                            "rubric_en": ["fact"],
+                            "source_line_ids": ["l0"],
+                        }
                         for i in range(n)
                     ]
                 }
             )
         if request_kind == "session_review_grade":
             return json.dumps(
-                {"verdict": "partial", "score": "65.4", "feedback_ja": "惜しい", "feedback_en": "close",
-                 "japanese_fixes": [{"original": "落ちた", "fixed": "落ちそうになった", "note_en": "aspect"}],
-                 "model_answer_ja": "模範"}
+                {
+                    "verdict": "partial",
+                    "score": "65.4",
+                    "feedback_ja": "惜しい",
+                    "feedback_en": "close",
+                    "japanese_fixes": [{"original": "落ちた", "fixed": "落ちそうになった", "note_en": "aspect"}],
+                    "model_answer_ja": "模範",
+                }
             )
         raise AssertionError(request_kind)
 
@@ -170,7 +195,9 @@ def test_grade_answer_normalizes_fields():
 
 def test_grade_answer_requires_text():
     with pytest.raises(ValueError):
-        sr.SessionReviewGenerator(_FakeAI()).grade_answer(sr.QuizQuestion(id="q", kind="k", question_ja="?"), "  ", [], "G")
+        sr.SessionReviewGenerator(_FakeAI()).grade_answer(
+            sr.QuizQuestion(id="q", kind="k", question_ja="?"), "  ", [], "G"
+        )
 
 
 def test_call_retries_once_on_unparseable_output():

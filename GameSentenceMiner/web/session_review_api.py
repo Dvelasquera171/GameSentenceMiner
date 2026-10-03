@@ -274,7 +274,9 @@ def register_session_review_routes(app):
             grade = build_generator(logger).grade_answer(question, answer, source_lines, review.game_name)
         except Exception as exc:
             return jsonify({"error": ai_error_message(exc), "code": "ai_request_failed"}), 502
-        attempt = SessionQuizAttemptsTable(review_id=review_id, question_id=question_id, answer=answer, grade=vars(grade))
+        attempt = SessionQuizAttemptsTable(
+            review_id=review_id, question_id=question_id, answer=answer, grade=vars(grade)
+        )
         attempt.save()
         return jsonify({"grade": vars(grade), "attempt_id": attempt.id}), 200
 

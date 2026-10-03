@@ -42,3 +42,6 @@ def register_routes() -> None:
     from GameSentenceMiner.web.cloud_sync_api import register_cloud_sync_api_routes
 
     register_cloud_sync_api_routes(app)
+    from GameSentenceMiner.web.session_review_api import register_session_review_routes
+
+    register_session_review_routes(app)

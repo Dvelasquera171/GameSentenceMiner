@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+{% set page_title = 'GSM Session Review' %}
+{% include 'components/html-head.html' %}
+
+<body>
+    <div class="container">
+        <h1>GSM - Session Review</h1>
+        {% include 'components/navigation.html' %}
+
+        <!-- Minimal functional scaffold. Layout/polish is tracked in docs/SESSION_REVIEW.md. -->
+        <div class="dashboard-card">
+            <div class="dashboard-card-header"><h3 class="dashboard-card-title">Sessions</h3></div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                <select id="gameSelect"></select>
+                <button id="startSessionBtn">Start session</button>
+                <button id="endSessionBtn">End session</button>
+                <span id="openSessionBadge"></span>
+            </div>
+            <table id="sessionsTable" style="width:100%; margin-top:10px;">
+                <thead><tr><th>Start</th><th>Duration</th><th>Lines</th><th>Chars</th><th>Source</th><th></th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="dashboard-card">
+            <div class="dashboard-card-header"><h3 class="dashboard-card-title">Reviews</h3></div>
+            <ul id="reviewsList"></ul>
+        </div>
+
+        <div class="dashboard-card" id="reviewCard" style="display:none;">
+            <div class="dashboard-card-header"><h3 class="dashboard-card-title" id="reviewTitle">Review</h3></div>
+            <div id="reviewStatus"></div>
+
+            <section id="summarySection">
+                <h4>あらすじ</h4>
+                <div id="summaryJa" lang="ja" style="white-space:pre-wrap;"></div>
+                <details><summary>English</summary><div id="summaryEn" style="white-space:pre-wrap;"></div></details>
+            </section>
+
+            <section id="charactersSection">
+                <h4>登場人物と態度</h4>
+                <ul id="charactersList"></ul>
+            </section>
+
+            <section id="missedSection">
+                <h4>見逃しやすい点</h4>
+                <ul id="missedJa" lang="ja"></ul>
+                <details><summary>English</summary><ul id="missedEn"></ul></details>
+            </section>
+
+            <section id="highlightsSection">
+                <h4>読み間違えやすい表現</h4>
+                <div id="highlightsList"></div>
+            </section>
+
+            <section id="quizSection">
+                <h4>読解クイズ</h4>
+                <div id="quizList"></div>
+            </section>
+        </div>
+    </div>
+
+    <script src="/static/js/shared.js"></script>
+    <script src="/static/js/review.js"></script>
+</body>
+</html>

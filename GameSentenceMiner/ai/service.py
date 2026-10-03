@@ -78,7 +78,7 @@ class AIService:
             logger=logger,
         )
 
-    def _make_request(self, prompt: str, request_kind: str) -> AIRequest:
+    def _make_request(self, prompt: str, request_kind: str, max_tokens: Optional[int] = None) -> AIRequest:
         ai_cfg = self.config_snapshot.ai
         provider = ai_cfg.provider
         model = self._get_model_for_provider(ai_cfg)
@@ -88,7 +88,7 @@ class AIService:
             prompt=prompt,
             temperature=ai_cfg.temperature,
             top_p=ai_cfg.top_p,
-            max_tokens=ai_cfg.max_output_tokens,
+            max_tokens=max_tokens or ai_cfg.max_output_tokens,
             request_kind=request_kind,
         )
 
@@ -294,11 +294,12 @@ class AIService:
         # dialogue translation/Anki cache or generate extra character-summary calls.
         return self._execute_request(self._make_request(prompt, request_kind=mode)).text
 
-    def generate_raw_prompt(self, prompt: str, request_kind: str = "raw") -> str:
+    def generate_raw_prompt(self, prompt: str, request_kind: str = "raw", max_tokens: Optional[int] = None) -> str:
         if not self._ensure_connectivity():
             return ""
 
-        request = self._make_request(prompt, request_kind=request_kind)
+        # Long structured outputs (session quizzes) need more room than the translation default.
+        request = self._make_request(prompt, request_kind=request_kind, max_tokens=max_tokens)
         try:
             response = self._execute_request(request)
             return response.text

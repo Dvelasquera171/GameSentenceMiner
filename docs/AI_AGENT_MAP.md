@@ -721,6 +721,13 @@ If you need to change DB schema/migrations:
 - `GameSentenceMiner/util/database/cron_table.py`
 - `GameSentenceMiner/util/database/stats_rollup_table.py`
 
+If you need to change the session comprehension review (summary/highlights/quiz):
+
+- `GameSentenceMiner/ai/features/session_review.py` (pipeline), `GameSentenceMiner/ai/prompts/session_review.py` (prompts)
+- `GameSentenceMiner/util/reading_sessions.py` (session boundaries), `GameSentenceMiner/util/database/session_review_tables.py`
+- `GameSentenceMiner/web/session_review_api.py`, `web/templates/review.html`, `web/static/js/review.js`
+- Roadmap and PC test steps: `docs/SESSION_REVIEW.md`
+
 If you need to change startup/shutdown orchestration:
 
 - `GameSentenceMiner/gsm.py`

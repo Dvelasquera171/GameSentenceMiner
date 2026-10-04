@@ -44,23 +44,24 @@ provides one; nothing to change.)
   `QUIZ_CHARS_PER_QUESTION`, `MAX_HIGHLIGHTS`): they depend on reading real reviews, and running
   one would spend NanoGPT tokens. Waiting for your feedback from the first run (see the questions
   at the end of the Session Review test steps).
-- **Session Review B.3** ("merge with previous" / "split here"): marked optional in
-  SESSION_REVIEW.md; left out to keep the change small.
+- **Session Review B.3** ("merge with previous" / "split here"): dropped (owner, 2026-10-04).
+  The Start/End button is the source of truth for a session: a manual range always wins over
+  the automatic gap split.
 
 ## Open questions
 
-1. **Y, `general` keys.** The decision said "keep the overlay's own scanning and popup settings".
-   I also copy 8 `general.*` keys from Firefox because they change what a card contains:
-   `language`, `resultOutputMode`, `glossaryLayoutMode`, `compactTags`, `mainDictionary`,
-   `sortFrequencyDictionary`, `sortFrequencyDictionaryOrder`, `averageFrequency`. Every other
-   `general` key (popup size, theme, fonts, …) stays the overlay's. Say if any of the 8 should stay
-   overlay-owned; it is one list in `GSM_Overlay/yomitan_sync.js` (`CARD_GENERAL_KEYS`).
-2. **Y, which overlay profile.** The export's current profile is synced into the overlay's
-   *current* profile only (yours is probably `GSM - Lapis` from GSM's Anki setup). Other overlay
-   profiles are untouched.
-3. **Session auto-end when the game closes** uses the overlay's window monitor, so it only works
+1. **Session auto-end when the game closes** uses the overlay's window monitor, so it only works
    while the overlay is running. Without the overlay, a session still ends on an OBS scene change
    or with the End button. Is that enough, or should GSM watch the game process itself?
+
+## Decided (2026-10-04)
+
+- **Y `general` keys:** keep copying all 8 card-content keys from Firefox (`CARD_GENERAL_KEYS`).
+- **Y profile:** sync into the overlay's active Yomitan profile only.
+- **C.4 speaker names:** dropped; the AI infers speakers from context.
+- **B.3 merge/split:** dropped; Start/End is the truth for a session.
+- **Next:** test E, Q, Session Review and Y first. Then F if a second PC is near, D if anime or
+  manga comes first, otherwise H (one-click session start).
 
 ---
 

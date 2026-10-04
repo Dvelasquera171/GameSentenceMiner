@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+{% set page_title = 'GSM Setup Check' %}
+{% include 'components/html-head.html' %}
+
+<body>
+    <style>
+        .setup-summary { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        .setup-summary-text { font-size: 18px; font-weight: 600; }
+        .setup-meta { color: var(--text-tertiary); font-size: 13px; }
+        .setup-row { display: grid; grid-template-columns: 70px 1fr; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border-color); }
+        .setup-row:first-child { border-top: none; }
+        .setup-badge { display: inline-block; min-width: 54px; text-align: center; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 12px; text-transform: uppercase; color: #fff; align-self: start; }
+        .setup-badge.ok { background: var(--success-color); }
+        .setup-badge.warn { background: var(--warning-color); color: #333; }
+        .setup-badge.fail { background: var(--danger-color); }
+        .setup-badge.skip { background: var(--text-tertiary); }
+        .setup-title { font-weight: 600; color: var(--text-primary); }
+        .setup-detail { color: var(--text-secondary); margin-top: 2px; word-break: break-word; }
+        .setup-fix { margin-top: 6px; padding: 6px 10px; border-left: 3px solid var(--accent-color); background: var(--bg-tertiary); color: var(--text-primary); border-radius: 4px; }
+    </style>
+    <div class="container">
+        <h1>GSM - Setup Check</h1>
+        {% include 'components/navigation.html' %}
+
+        <div class="dashboard-card">
+            <div class="setup-summary">
+                <span id="setupSummary" class="setup-summary-text">Checking…</span>
+                <button id="recheckBtn" class="action-btn primary" title="Runs every check again, including one tiny AI test request">Re-check (includes AI test)</button>
+                <span id="setupMeta" class="setup-meta"></span>
+            </div>
+        </div>
+
+        <div class="dashboard-card">
+            <div id="setupChecks"></div>
+        </div>
+
+        {% include 'components/settings-modal.html' %}
+    </div>
+
+    <script src="/static/js/shared.js"></script>
+    <script src="/static/js/setup_check.js"></script>
+</body>
+</html>

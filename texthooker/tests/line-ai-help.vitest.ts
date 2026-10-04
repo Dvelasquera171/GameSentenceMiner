@@ -55,9 +55,7 @@ test('the opened panel can ask a question about the chosen line', async () => {
 	select.value = 'custom';
 	select.dispatchEvent(new Event('change'));
 	await tick();
-	const question = document.querySelector(
-		'input[placeholder="What does this particle mean here?"]',
-	) as HTMLInputElement;
+	const question = document.querySelector('textarea[aria-label="Your question"]') as HTMLTextAreaElement;
 	question.value = 'Why this ending?';
 	question.dispatchEvent(new Event('input'));
 	await tick();

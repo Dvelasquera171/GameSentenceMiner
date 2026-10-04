@@ -1349,6 +1349,10 @@ def open_ai_setup():
     return jsonify({"settings_opened": opened, "href": AI_TRANSLATION_SETUP_DOCS_URL}), 200
 
 
+MAX_ANALYSIS_HISTORY_TURNS = 20
+MAX_ANALYSIS_CONTEXT_LINES = 200
+
+
 @app.route("/analyze-line", methods=["POST"])
 def analyze_line():
     data = request.get_json(silent=True) or {}
@@ -1359,6 +1363,31 @@ def analyze_line():
         return jsonify({"error": "Choose a sentence and a valid analysis mode."}), 400
     if not isinstance(question, str) or len(question) > 4000 or (mode == "custom" and not question.strip()):
         return jsonify({"error": "Enter a question of 1–4000 characters."}), 400
+    # Optional follow-up fields; absent means the original one-shot behaviour.
+    follow_up = {}
+    if "history" in data:
+        history = data["history"]
+        if (
+            not isinstance(history, list)
+            or len(history) > MAX_ANALYSIS_HISTORY_TURNS
+            or any(
+                not isinstance(turn, dict)
+                or not isinstance(turn.get("question", ""), str)
+                or not isinstance(turn.get("answer", ""), str)
+                for turn in history
+            )
+        ):
+            return jsonify({"error": "history must be a list of up to 20 {question, answer} turns."}), 400
+        follow_up["history"] = history
+    if "context_lines" in data:
+        context_lines = data["context_lines"]
+        if (
+            isinstance(context_lines, bool)
+            or not isinstance(context_lines, int)
+            or not -1 <= context_lines <= MAX_ANALYSIS_CONTEXT_LINES
+        ):
+            return jsonify({"error": "context_lines must be -1 (whole session) or 0–200."}), 400
+        follow_up["context_lines"] = context_lines
     if not get_config().ai.is_configured():
         return jsonify(ai_setup_required(automatic=data.get("automatic") is True)), 400
     line = get_event_line_by_id(event_id)
@@ -1368,7 +1397,9 @@ def analyze_line():
     if not isinstance(text, str) or not text.strip():
         return jsonify({"error": "No sentence available to explain."}), 400
     try:
-        result = get_sentence_analysis(get_all_lines(), text, line, get_current_game(), mode=mode, question=question)
+        result = get_sentence_analysis(
+            get_all_lines(), text, line, get_current_game(), mode=mode, question=question, **follow_up
+        )
         if not result:
             raise ValueError("Empty AI response")
         return jsonify({"analysis": result, "mode": mode}), 200

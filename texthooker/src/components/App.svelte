@@ -17,6 +17,7 @@
 		mdiNoteEdit,
 		mdiPause,
 		mdiPlay,
+		mdiStethoscope,
 		mdiVolumeHigh,
 		mdiWindowMaximize,
 		mdiWindowRestore,
@@ -1451,7 +1452,19 @@
 		on:click={() => window.open('/overview', '_blank')}
 		/>
 	</div>
-	
+	<div
+		role="button"
+		class="mr-1 hover:text-primary sm:mr-2"
+		title="Open Setup Check (is Luna, Anki, AI and the overlay working?)"
+	>
+		<Icon
+		path={mdiStethoscope}
+		width={iconSize}
+		height={iconSize}
+		on:click={() => window.open('/setup-check', '_blank')}
+		/>
+	</div>
+
 	<Icon
 		class="cursor-pointer mr-1 hover:text-primary md:mr-2"
 		path={mdiCog}

@@ -91,3 +91,54 @@ def test_overlay_study_uses_renderer_blocks_and_returns_separate_output(monkeypa
         {"type": "translation-result", "data": {"request_id": "study", "text": "Explanation", "mode": "grammar"}}
     ]
     analysis.assert_called_once_with([], "例文", None, "Game", "grammar")
+
+
+def _analysis_client(monkeypatch):
+    line = SimpleNamespace(text="例", translation="", set_TL=Mock())
+    monkeypatch.setattr(texthooking_page, "get_event_line_by_id", lambda _id: line)
+    monkeypatch.setattr(
+        texthooking_page, "get_config", lambda: SimpleNamespace(ai=Ai(gemini_api_key="key"), general=General())
+    )
+    monkeypatch.setattr(texthooking_page, "get_all_lines", lambda: [line])
+    monkeypatch.setattr(texthooking_page, "get_current_game", lambda: "Game")
+    analyze = Mock(return_value="Explanation")
+    monkeypatch.setattr(texthooking_page, "get_sentence_analysis", analyze)
+    return texthooking_page.app.test_client(), analyze
+
+
+def test_analysis_without_new_fields_keeps_the_old_call(monkeypatch):
+    client, analyze = _analysis_client(monkeypatch)
+    assert client.post("/analyze-line", json={"id": "1", "mode": "grammar"}).status_code == 200
+    assert "history" not in analyze.call_args.kwargs
+    assert "context_lines" not in analyze.call_args.kwargs
+
+
+def test_follow_up_passes_history_and_context(monkeypatch):
+    client, analyze = _analysis_client(monkeypatch)
+    history = [{"question": "この「は」はなぜ？", "answer": "Topic marker."}]
+    response = client.post(
+        "/analyze-line",
+        json={"id": "1", "mode": "custom", "question": "じゃあ「が」なら？", "history": history, "context_lines": -1},
+    )
+    assert response.status_code == 200
+    assert analyze.call_args.kwargs["history"] == history
+    assert analyze.call_args.kwargs["context_lines"] == -1
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"history": "not a list"},
+        {"history": [{"question": 1, "answer": "a"}]},
+        {"history": [{"question": "q", "answer": "a"}] * 21},
+        {"context_lines": -2},
+        {"context_lines": 201},
+        {"context_lines": "10"},
+        {"context_lines": True},
+    ],
+)
+def test_invalid_follow_up_fields_are_rejected(monkeypatch, extra):
+    client, analyze = _analysis_client(monkeypatch)
+    response = client.post("/analyze-line", json={"id": "1", "mode": "grammar", **extra})
+    assert response.status_code == 400
+    analyze.assert_not_called()

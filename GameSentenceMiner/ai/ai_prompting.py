@@ -62,11 +62,29 @@ def get_ai_prompt_result(
         return ""
 
 
-def get_sentence_analysis(lines, sentence, current_line, game_title="", mode="sentence", question="") -> str:
+def get_sentence_analysis(
+    lines, sentence, current_line, game_title="", mode="sentence", question="", history=None, context_lines=None
+) -> str:
     config = get_config()
     AIService, snapshot_config = _get_ai_service_components()
     service = AIService(config_snapshot=snapshot_config(config.ai, config.general), logger=logger)
-    return service.analyze(lines, sentence, current_line, game_title, mode=mode, question=question)
+    gap_seconds = 3600.0
+    if context_lines == -1:
+        from GameSentenceMiner.util.config.configuration import get_stats_config
+
+        # "Whole session" uses the same gap rule as the stats and Session Review pages.
+        gap_seconds = float(get_stats_config().session_gap_seconds)
+    return service.analyze(
+        lines,
+        sentence,
+        current_line,
+        game_title,
+        mode=mode,
+        question=question,
+        history=history,
+        context_lines=context_lines,
+        session_gap_seconds=gap_seconds,
+    )
 
 
 def ai_config_changed(config: Ai, current: Optional[Ai]) -> bool:

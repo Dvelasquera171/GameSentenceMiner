@@ -15,8 +15,8 @@ AI test, see E). Every Python change was followed by `ruff format` and
 |---|---|---|
 | Pre-existing red tests in the required suite | fixed | `d71385c1` |
 | E. Setup health page | done, owner test pending | `84eef80f` |
-| Y. Overlay Yomitan sync from Firefox export | in progress | |
-| Q. AI help follow-ups + context size | not started | |
+| Y. Overlay Yomitan sync from Firefox export | done, owner test pending | `a6abc1e6` |
+| Q. AI help follow-ups + context size | in progress | |
 | Session Review A / B / C | not started | |
 
 ## Needs owner approval
@@ -25,7 +25,15 @@ Nothing yet.
 
 ## Open questions
 
-Nothing yet.
+1. **Y, `general` keys.** The decision said "keep the overlay's own scanning and popup settings".
+   I also copy 8 `general.*` keys from Firefox because they change what a card contains:
+   `language`, `resultOutputMode`, `glossaryLayoutMode`, `compactTags`, `mainDictionary`,
+   `sortFrequencyDictionary`, `sortFrequencyDictionaryOrder`, `averageFrequency`. Every other
+   `general` key (popup size, theme, fonts, …) stays the overlay's. Say if any of the 8 should stay
+   overlay-owned; it is one list in `GSM_Overlay/yomitan_sync.js` (`CARD_GENERAL_KEYS`).
+2. **Y, which overlay profile.** The export's current profile is synced into the overlay's
+   *current* profile only (yours is probably `GSM - Lapis` from GSM's Anki setup). Other overlay
+   profiles are untouched.
 
 ---
 
@@ -77,3 +85,64 @@ and their fix text shown. One Re-check: "OpenAI / deepseek/deepseek-v4-pro-0813 
 6. GSM Settings → AI: change one character of the API key, save → Re-check → "AI reachable"
    fails with "401/403: the provider rejected the API key". Restore the key.
 7. Close Luna → reload → "Text source: LunaTranslator" fails with the Luna fix text.
+
+## Y. Overlay Yomitan sync from the Firefox export — done (`a6abc1e6`)
+
+**What:** Firefox Yomitan stays the master. You export from Firefox into
+`%APPDATA%\GameSentenceMiner\yomitan_sync\` (keep Yomitan's default file names
+`yomitan-settings-*.json` / `yomitan-dictionaries-*.json`; `settings.json` / `dictionaries.json`
+also work; the newest file wins). GSM pushes them into the overlay's Yomitan.
+
+- **Taken from Firefox:** `dictionaries` (order, enabled, styles), `anki` (card formats, deck,
+  model, fields, tags, duplicate rules), `translation`, `parsing`, `audio`, `sentenceParsing`, and
+  the 8 card-content `general` keys listed under Open questions.
+- **Kept from the overlay:** `popupWindow`, `scanning`, `inputs`, `clipboard`, `accessibility`, all
+  other `general` keys, profile name/conditions, other profiles, global settings. Dictionaries only
+  the overlay has (GSM Character Dictionary) keep their entry. A non-localhost Anki server in the
+  export is ignored (same guard as Yomitan's own import).
+- **Card formats are verified:** after applying, the overlay re-reads its settings and the sync
+  fails unless every card format equals Firefox's field by field (deck, model, every field's value
+  and overwrite mode). The setup page repeats that check independently (row "Overlay Yomitan: Anki
+  card formats match Firefox", fails with the exact differences).
+- **Dictionaries:** "Export Dictionary Collection" is a Dexie JSON file, not a zip. The overlay
+  imports it exactly like Yomitan's "Import Dictionary Collection" (purge, then import), fetched
+  from `GET /api/yomitan-sync/dictionaries-file` (localhost only). Progress shows on the setup page.
+  After an import, settings are re-applied automatically. The GSM Character Dictionary is removed
+  by the purge and comes back the next time the overlay starts.
+- **When it runs:** a watcher checks the folder every 10 s while the overlay is connected and syncs
+  each new export once (dictionaries first, settings after). Manual: **Sync now** on the setup page,
+  or GSM Settings → Overlay → **Sync Yomitan from Firefox export now** (next to **Open sync folder**).
+- The overlay records what it applied in `%APPDATA%\gsm_overlay\yomitan_sync_state.json`, so the
+  setup page can say "synced" or "export is newer" across restarts.
+- In dev the overlay runs in-process from `GSM_Overlay/main.js`, so restarting GSM is enough; no
+  overlay build step.
+- Files: `GSM_Overlay/yomitan_sync.js` (+ 3 small hooks in `main.js`), `GameSentenceMiner/util/yomitan_sync.py`,
+  `web/yomitan_sync_api.py`, `web/overlay_handler.py`, `ui/config/tabs/overlay.py`, `gsm.py` (starts the watcher).
+  Tests: `GSM_Overlay/tests/yomitan_sync.test.cjs` (12), `tests/web/test_yomitan_sync.py` (23).
+
+**Verified here:** unit tests only for the overlay part (no overlay was started: that would rewrite
+your overlay profile in `%APPDATA%`). The merge was also run against your real
+`firefox-settings.json` snapshot: card formats identical after merge, popup and scanning untouched.
+GSM restarted cleanly; the setup page shows "No Firefox settings export in …\yomitan_sync" (warn).
+
+**Owner test (click by click):**
+1. Firefox → Yomitan icon → ⚙ Settings → **Backup** → **Export Settings**. Then
+   **Export Dictionary Collection** (large; wait until the download finishes).
+2. GSM Settings → **Overlay** → **Open sync folder** (creates the folder). Move both downloaded
+   files into it. Do not rename them.
+3. Start the overlay (Yomitan as dictionary) and GSM if not running.
+4. Firefox → `http://localhost:55000/setup-check`. Within ~10 s the row "Overlay Yomitan: synced
+   from Firefox" says "Dictionary import running (import, n/m rows)". Reload occasionally; it can
+   take several minutes. The overlay's lookups are empty while it runs.
+5. When it finishes, both Yomitan rows are **ok**: "Synced from yomitan-settings-… into overlay
+   profile '…'" and "All N card formats identical, field by field: Expression → General Mining /
+   Lapis (22 fields)".
+6. Open the overlay's Yomitan settings: dictionary order and the Anki card format match Firefox;
+   popup size and scan modifier are still the overlay's.
+7. Hover a word in game: dictionaries (and pitch, once Firefox has Kanjium) show. Restart the overlay
+   once so the GSM Character Dictionary comes back.
+8. Firefox: move a dictionary up, **Export Settings** again into the folder. Within ~10 s the
+   overlay picks it up (or the row says the export is newer: press **Sync now**). Order updates.
+9. Optional failure check: in the overlay's Yomitan settings change the deck of the Expression card
+   format → reload the setup page after 60 s (or press Re-check) → the card-format row **fails**
+   naming the deck → **Sync now** → ok.

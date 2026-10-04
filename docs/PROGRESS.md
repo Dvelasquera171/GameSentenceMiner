@@ -16,8 +16,8 @@ AI test, see E). Every Python change was followed by `ruff format` and
 | Pre-existing red tests in the required suite | fixed | `d71385c1` |
 | E. Setup health page | done, owner test pending | `84eef80f` |
 | Y. Overlay Yomitan sync from Firefox export | done, owner test pending | `a6abc1e6` |
-| Q. AI help follow-ups + context size | in progress | |
-| Session Review A / B / C | not started | |
+| Q. AI help follow-ups + context size | done, owner test pending | `cbd77e1d` |
+| Session Review A / B / C | in progress | |
 
 ## Needs owner approval
 
@@ -146,3 +146,38 @@ GSM restarted cleanly; the setup page shows "No Firefox settings export in …\y
 9. Optional failure check: in the overlay's Yomitan settings change the deck of the Expression card
    format → reload the setup page after 60 s (or press Re-check) → the card-format row **fails**
    naming the deck → **Sync now** → ok.
+
+## Q. AI help: follow-ups and context size — done (`cbd77e1d`)
+
+**What:** the texthooker's per-line AI help keeps a conversation.
+- `POST /analyze-line` accepts two **optional** fields; without them nothing changes.
+  `history`: earlier `[{question, answer}]` turns (up to 20 accepted, last 8 sent to the model,
+  each trimmed), passed as "Earlier in this conversation" data. `context_lines`: `0`–`200` lines
+  each side, or `-1` = the current reading session (same gap rule as Stats/Session Review, your
+  `session_gap_seconds` is 3600; same scene; capped at 20,000 characters, nearest lines kept, so a
+  "whole session" question costs at most roughly 15k input tokens).
+- Panel: the thread stays until you close it or press **New thread**; a **Follow-up** box under the
+  answers (Enter sends, Shift+Enter new line, Enter that confirms IME conversion never sends);
+  a **Dialogue context** selector (Default / ±25 / ±50 / Whole session). Answers are plain
+  selectable text, so Firefox Yomitan works on them.
+- Texthooker header: new stethoscope icon → opens `/setup-check`.
+- Texthooker rebuilt with `build_for_gsm.ps1` (pnpm 11.9.0, the version pinned in
+  `texthooker/package.json`, was installed into a temp folder only for the build; nothing global).
+- Files: `ai/prompts/builder.py` (`format_conversation_history`, `select_session_lines`),
+  `ai/service.py`, `ai/ai_prompting.py`, `web/texthooking_page.py`, `texthooker/src/components/AIHelp.svelte`,
+  `App.svelte`, built `web/templates/index.html`. Tests: 13 new Python tests, 2 new + 2 updated vitest
+  tests (texthooker suite 33/33).
+
+**Verified here:** GSM restarted cleanly and serves the new texthooker; an invalid
+`context_lines` is rejected before any AI call. No AI call was made for Q.
+
+**Owner test (click by click):**
+1. Firefox → `http://localhost:55000`. Hook a game so a few lines appear.
+2. On a line: **⋯ (More line actions)** → **Ask AI**. Choose **Ask a question**, type
+   `この「は」はなぜ？`, press Enter → an answer appears.
+3. In **Follow-up** type `じゃあ「が」なら？`, Enter → the answer refers to the first exchange.
+4. While typing with the Japanese IME, Enter only confirms the conversion; a second Enter sends.
+   Shift+Enter inserts a new line.
+5. Set **Dialogue context** to **Whole session**, ask who a pronoun (彼/あいつ) refers to → the
+   answer uses lines from earlier in the session.
+6. **New thread** clears the conversation. The stethoscope icon in the header opens Setup Check.

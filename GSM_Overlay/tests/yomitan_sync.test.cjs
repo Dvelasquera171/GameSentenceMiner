@@ -300,3 +300,43 @@ test('page scripts compile and run in a hidden window that is always destroyed',
   }
   await assert.rejects(readStatus(FakeWindow, null), /Yomitan as its dictionary/);
 });
+
+test('status answers immediately during an import and reports it as busy', async () => {
+  const sent = [];
+  let finishImport;
+  const handler = createSyncHandler({
+    syncSettings: async () => ({}),
+    importDictionaries: () => new Promise((resolve) => { finishImport = resolve; }),
+    readStatus: async () => ({ profileName: 'P', installed: [] }),
+    send: (message) => sent.push(message),
+    state: memoryState(),
+  });
+  const importing = handler({ type: 'yomitan-sync-dictionaries', request_id: 'd1', deadline: Date.now() + 10000, data: { fingerprint: 'f' } });
+  await new Promise((resolve) => setImmediate(resolve));
+  await handler({ type: 'yomitan-sync-status-request', request_id: 's1', deadline: Date.now() + 10000 });
+  const status = sent.find((m) => m.request_id === 's1');
+  assert.ok(status, 'status must not wait for the import');
+  assert.deepEqual(status.busy, { settings: false, dictionaries: true });
+
+  finishImport({ installed: ['JPDBv2'] });
+  await importing;
+  const done = sent.find((m) => m.request_id === 'd1');
+  assert.equal(done.success, true);
+  assert.deepEqual(done.busy, { settings: false, dictionaries: false });
+  await handler({ type: 'yomitan-sync-status-request', request_id: 's2', deadline: Date.now() + 10000 });
+  assert.deepEqual(sent.find((m) => m.request_id === 's2').busy, { settings: false, dictionaries: false });
+});
+
+test('a failed job clears its busy flag', async () => {
+  const sent = [];
+  const handler = createSyncHandler({
+    syncSettings: async () => { throw new Error('nope'); },
+    importDictionaries: async () => ({}),
+    readStatus: async () => ({}),
+    send: (message) => sent.push(message),
+    state: memoryState(),
+  });
+  await handler({ type: 'yomitan-sync-settings', request_id: 'x', deadline: Date.now() + 10000, data: {} });
+  assert.equal(sent[0].success, false);
+  assert.deepEqual(sent[0].busy, { settings: false, dictionaries: false });
+});

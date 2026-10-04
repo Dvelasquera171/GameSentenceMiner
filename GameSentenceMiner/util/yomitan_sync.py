@@ -29,6 +29,7 @@ WATCH_INTERVAL_SECONDS = 10
 STATUS_MAX_AGE_SECONDS = 60
 SETTINGS_TIMEOUT_SECONDS = 60
 STATUS_TIMEOUT_SECONDS = 25
+IMPORT_STALE_SECONDS = 60
 
 EXPORT_STEPS = (
     "In Firefox: Yomitan → Settings → Backup → Export Settings, and (when dictionaries changed) "
@@ -251,10 +252,39 @@ def accept_overlay_message(message: dict) -> bool:
             _state["dictionary_job"] = {"running": False, "request_id": "", "started_at": 0.0}
             _state["progress"] = None
             follow_up = bool(message.get("success"))
+        elif _import_was_interrupted(message):
+            _clear_interrupted_import()
     if follow_up:
         # Dictionary entries in the settings refer to installed dictionaries; re-apply them now.
         threading.Thread(target=_sync_settings_quietly, name="yomitan-sync-after-import", daemon=True).start()
     return True
+
+
+def _import_was_interrupted(message: dict) -> bool:
+    """GSM thinks an import runs, but the overlay that answered is not importing (it was closed or restarted)."""
+    busy = message.get("busy")
+    return (
+        _state["dictionary_job"]["running"]
+        and isinstance(busy, dict)
+        and not busy.get("dictionaries")
+        and time.time() - _state["dictionary_job"]["started_at"] > 1
+    )
+
+
+def _clear_interrupted_import() -> None:
+    # Caller holds _lock.
+    logger.warning("Overlay Yomitan dictionary import was interrupted (overlay closed); it will be retried.")
+    _state["dictionary_job"] = {"running": False, "request_id": "", "started_at": 0.0}
+    _state["progress"] = None
+    _state["results"]["dictionaries"] = {
+        "kind": "dictionaries",
+        "success": False,
+        "error": "The dictionary import was interrupted because the overlay closed. It restarts automatically.",
+        "at": time.time(),
+    }
+    export = dictionaries_export()
+    if export is not None:
+        _watch["attempted"].discard(export["fingerprint"])
 
 
 def _sync_settings_quietly() -> None:
@@ -393,8 +423,14 @@ def watch_once() -> str | None:
         _watch["status_failed"] = False
     elif _watch["status_failed"]:
         return None  # retry after the overlay reconnects, or via Sync now
+    with _lock:
+        job, progress = dict(_state["dictionary_job"]), dict(_state["progress"] or {})
+    # A running import that has gone quiet may have died with its overlay; a fresh status settles it.
+    last_heard = max(job["started_at"], float(progress.get("at") or 0))
+    stale_import = job["running"] and time.time() - last_heard > IMPORT_STALE_SECONDS
     try:
-        status = overlay_status(max_age=0 if newly_connected else float("inf"))
+        max_age = 0 if newly_connected else (IMPORT_STALE_SECONDS if stale_import else float("inf"))
+        status = overlay_status(max_age=max_age)
     except YomitanSyncError as exc:
         _watch["status_failed"] = True
         logger.debug(f"Yomitan sync: overlay status unavailable: {exc}")

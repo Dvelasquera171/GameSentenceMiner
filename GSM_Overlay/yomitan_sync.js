@@ -283,55 +283,72 @@ const MESSAGE_KINDS = {
 };
 
 function createSyncHandler({ syncSettings: applySettings, importDictionaries: importAll, readStatus: status, send, state, now = Date.now }) {
-  // The overlay has two connections to the same backend; share duplicate requests and run one job at a time.
+  // The overlay has two connections to the same backend; share duplicate requests.
+  // Settings and dictionary jobs run one at a time; status reads never wait behind them.
   const requests = new Map();
   let queue = Promise.resolve();
+  // Reported with every answer so GSM can tell a running import from one that died with an old overlay.
+  const busy = { settings: false, dictionaries: false };
   const readState = () => {
     try { return state.read() || {}; } catch (_) { return {}; }
+  };
+  const run = async (kind, id, message) => {
+    let result;
+    let failure = null;
+    try {
+      if (!Number.isFinite(message.deadline) || message.deadline <= Date.now()) {
+        throw new Error('Sync request expired. Retry from GSM.');
+      }
+      const input = message.data && typeof message.data === 'object' ? message.data : {};
+      if (kind === 'settings') {
+        result = await applySettings(input, message.deadline);
+        const next = readState();
+        next.settings = {
+          hash: String(input.settings_hash || ''),
+          exportDate: String(input.export_date || ''),
+          exportName: String(input.export_name || ''),
+          appliedAt: now(),
+        };
+        state.write(next);
+      } else if (kind === 'dictionaries') {
+        result = await importAll(input, (progress) => send({ type: 'yomitan-sync-progress', request_id: id, kind, ...progress }));
+        const next = readState();
+        next.dictionaries = {
+          hash: String(input.fingerprint || ''),
+          exportName: String(input.export_name || ''),
+          importedAt: now(),
+        };
+        state.write(next);
+      } else {
+        result = await status();
+      }
+    } catch (error) {
+      failure = error;
+    }
+    if (kind !== 'status') busy[kind] = false;
+    if (failure) {
+      return {
+        type: 'yomitan-sync-result', request_id: id, kind, success: false,
+        error: failure?.message || String(failure), lastSync: readState(), busy: { ...busy },
+      };
+    }
+    return { ...result, type: 'yomitan-sync-result', request_id: id, kind, success: true, lastSync: readState(), busy: { ...busy } };
   };
   const handler = async (message) => {
     const kind = MESSAGE_KINDS[message?.type];
     if (!kind || typeof message.request_id !== 'string') return;
     const id = message.request_id;
     if (!requests.has(id)) {
-      const operation = queue.then(async () => {
-        try {
-          if (!Number.isFinite(message.deadline) || message.deadline <= Date.now()) {
-            throw new Error('Sync request expired. Retry from GSM.');
-          }
-          const input = message.data && typeof message.data === 'object' ? message.data : {};
-          let result;
-          if (kind === 'settings') {
-            result = await applySettings(input, message.deadline);
-            const next = readState();
-            next.settings = {
-              hash: String(input.settings_hash || ''),
-              exportDate: String(input.export_date || ''),
-              exportName: String(input.export_name || ''),
-              appliedAt: now(),
-            };
-            state.write(next);
-          } else if (kind === 'dictionaries') {
-            result = await importAll(input, (progress) => send({ type: 'yomitan-sync-progress', request_id: id, kind, ...progress }));
-            const next = readState();
-            next.dictionaries = {
-              hash: String(input.fingerprint || ''),
-              exportName: String(input.export_name || ''),
-              importedAt: now(),
-            };
-            state.write(next);
-          } else {
-            result = await status();
-          }
-          return { ...result, type: 'yomitan-sync-result', request_id: id, kind, success: true, lastSync: readState() };
-        } catch (error) {
-          return {
-            type: 'yomitan-sync-result', request_id: id, kind, success: false,
-            error: error?.message || String(error), lastSync: readState(),
-          };
-        }
-      });
-      queue = operation.catch(() => {});
+      let operation;
+      if (kind === 'status') {
+        operation = run(kind, id, message);
+      } else {
+        operation = queue.then(() => {
+          busy[kind] = true;
+          return run(kind, id, message);
+        });
+        queue = operation.catch(() => {});
+      }
       requests.set(id, operation);
       if (requests.size > 32) requests.delete(requests.keys().next().value);
     }

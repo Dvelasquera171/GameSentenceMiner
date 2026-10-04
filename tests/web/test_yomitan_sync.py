@@ -431,3 +431,33 @@ def test_dictionaries_file_route(client, sync_dir):
     res.close()
     remote = client.get("/api/yomitan-sync/dictionaries-file", environ_overrides={"REMOTE_ADDR": "10.0.0.2"})
     assert remote.status_code == 403
+
+
+def test_import_interrupted_by_overlay_restart_is_retried(sync_dir, monkeypatch):
+    _write_settings(sync_dir)
+    _write_dictionaries(sync_dir)
+    overlay = FakeOverlay(
+        monkeypatch, report={**_report(installed=()), "busy": {"settings": False, "dictionaries": False}}
+    )
+    monkeypatch.setattr(yomitan_sync, "get_config", lambda: SimpleNamespace(general=SimpleNamespace(single_port=7275)))
+    assert yomitan_sync.watch_once() == "dictionaries"
+    yomitan_sync._state["dictionary_job"]["started_at"] -= 10
+    assert yomitan_sync.watch_once() is None  # still believed running
+
+    # The overlay was closed and reopened: the new one answers "not importing".
+    yomitan_sync._watch["connected"] = False
+    assert yomitan_sync.watch_once() == "dictionaries"
+    assert [m["type"] for m in overlay.sent].count("yomitan-sync-dictionaries") == 2
+    assert "interrupted" in yomitan_sync.get_state()["results"]["dictionaries"]["error"]
+
+
+def test_running_import_is_not_cleared_while_overlay_reports_busy(sync_dir, monkeypatch):
+    _write_dictionaries(sync_dir)
+    FakeOverlay(monkeypatch, report={**_report(), "busy": {"settings": False, "dictionaries": True}})
+    monkeypatch.setattr(yomitan_sync, "get_config", lambda: SimpleNamespace(general=SimpleNamespace(single_port=7275)))
+    yomitan_sync.start_dictionary_import()
+    yomitan_sync._state["dictionary_job"]["started_at"] -= 600  # quiet for 10 minutes
+    yomitan_sync._watch["connected"] = True
+    assert yomitan_sync.watch_once() is None
+    time.sleep(0.05)
+    assert yomitan_sync.get_state()["dictionary_job"]["running"] is True

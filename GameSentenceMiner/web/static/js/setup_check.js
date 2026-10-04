@@ -15,8 +15,34 @@
                     <div class="setup-title">${esc(c.title)}</div>
                     <div class="setup-detail">${esc(c.detail)}</div>
                     ${c.fix && c.status !== 'ok' ? `<div class="setup-fix">${esc(c.fix)}</div>` : ''}
+                    ${c.action ? `<button class="control-btn setup-action" data-check="${esc(c.id)}" style="margin-top:6px;">${esc(c.action.label)}</button><span class="setup-meta setup-action-result"></span>` : ''}
                 </div>
             </div>`).join('');
+        const actions = Object.fromEntries((data.checks || []).filter((c) => c.action).map((c) => [c.id, c.action]));
+        document.querySelectorAll('.setup-action').forEach((btn) => {
+            btn.onclick = () => runAction(btn, actions[btn.dataset.check]);
+        });
+    }
+
+    // One-click fixes (e.g. Yomitan "Sync now"); re-runs the checks without the AI test afterwards.
+    async function runAction(btn, action) {
+        const out = btn.nextElementSibling;
+        btn.disabled = true;
+        out.textContent = ' Working…';
+        try {
+            const res = await fetch(action.url, {
+                method: action.method || 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(action.body || {}),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+            out.textContent = res.status === 202 ? ' Started. This page refreshes in a few seconds.' : ' Done.';
+            setTimeout(() => load(false), res.status === 202 ? 5000 : 500);
+        } catch (err) {
+            out.textContent = ` ${err.message}`;
+            btn.disabled = false;
+        }
     }
 
     async function load(aiTest) {

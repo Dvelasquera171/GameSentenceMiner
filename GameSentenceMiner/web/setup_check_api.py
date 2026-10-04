@@ -8,14 +8,16 @@ Each check is {id, title, status (ok|warn|fail|skip), detail, fix}. Every AnkiCo
 is read-only. The AI test call costs tokens, so it runs only with ai_test=1 (the page's
 Re-check button), never on page load, and at most once per AI_TEST_COOLDOWN_SECONDS.
 """
+# GSM status times and file times are local wall-clock values.
+# ruff: noqa: DTZ005, DTZ007
 
 from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime
-from typing import Callable, Dict, List, Optional
 
 import requests
 from flask import jsonify, render_template, request
@@ -60,6 +62,8 @@ class Check:
     status: str
     detail: str = ""
     fix: str = ""
+    # Optional one-click fix rendered as a button: {label, method, url, body}.
+    action: dict | None = None
 
 
 class AnkiCallError(RuntimeError):
@@ -94,12 +98,12 @@ def _anki_call(action: str, timeout: float = ANKI_TIMEOUT_SECONDS, **params):
 # ---------------------------------------------------------------------------
 
 
-def _source_connected(uri: str, connected: Dict[str, str]) -> bool:
+def _source_connected(uri: str, connected: dict[str, str]) -> bool:
     prefix = f"ws://{uri.strip()}"
     return any(str(key) == prefix or str(key).startswith(prefix + "/") for key in connected)
 
 
-def check_text_sources(config, status: dict) -> List[Check]:
+def check_text_sources(config, status: dict) -> list[Check]:
     general = config.general
     connected = status.get("websockets_connected") or {}
     if isinstance(connected, list):
@@ -151,7 +155,7 @@ def check_text_sources(config, status: dict) -> List[Check]:
     return [luna_check, check_recent_line(status)]
 
 
-def check_recent_line(status: dict, now: Optional[datetime] = None) -> Check:
+def check_recent_line(status: dict, now: datetime | None = None) -> Check:
     title = "Text received recently"
     fix = "Hook the game in Luna; text should appear on the texthooker page."
     raw = status.get("last_line_received")
@@ -191,10 +195,10 @@ def check_texthooker(config) -> Check:
 # ---------------------------------------------------------------------------
 
 
-def configured_anki_fields(config) -> Dict[str, str]:
+def configured_anki_fields(config) -> dict[str, str]:
     """GSM field label → Anki field name for every field GSM is configured to write."""
     anki_cfg = config.anki
-    fields: Dict[str, str] = {}
+    fields: dict[str, str] = {}
     for key, label in ANKI_FIELD_LABELS.items():
         field_cfg = getattr(anki_cfg, key, None)
         name = str(getattr(field_cfg, "name", "") or "").strip()
@@ -211,7 +215,7 @@ def configured_anki_fields(config) -> Dict[str, str]:
     return fields
 
 
-def check_anki(config, anki_call: Callable = None) -> List[Check]:
+def check_anki(config, anki_call: Callable | None = None) -> list[Check]:
     call = anki_call or _anki_call
     anki_cfg = config.anki
     titles = {
@@ -222,7 +226,7 @@ def check_anki(config, anki_call: Callable = None) -> List[Check]:
         "anki_recent_notes": "Yomitan → Anki: recent notes",
     }
 
-    def skipped(reason: str) -> List[Check]:
+    def skipped(reason: str) -> list[Check]:
         return [Check(cid, title, STATUS_SKIP, reason) for cid, title in titles.items() if cid != "ankiconnect"]
 
     if not anki_cfg.enabled:
@@ -365,7 +369,7 @@ def check_anki(config, anki_call: Callable = None) -> List[Check]:
 # ---------------------------------------------------------------------------
 
 _ai_test_lock = threading.Lock()
-_ai_test_cache: Dict[str, object] = {"at": 0.0, "key": None, "check": None}
+_ai_test_cache: dict[str, object] = {"at": 0.0, "key": None, "check": None}
 
 
 def _ai_model(ai_cfg) -> str:
@@ -428,7 +432,7 @@ def _default_ai_tester(config):
     return response.model, int(latency), response.text or ""
 
 
-def check_ai_reachable(config, run_test: bool, tester: Callable = None, now: Callable = time.monotonic) -> Check:
+def check_ai_reachable(config, run_test: bool, tester: Callable | None = None, now: Callable = time.monotonic) -> Check:
     title = "AI reachable"
     ai_cfg = config.ai
     if not ai_cfg.is_configured():
@@ -501,7 +505,7 @@ def check_obs(status: dict) -> Check:
 # ---------------------------------------------------------------------------
 
 
-def summarize(checks: List[Check]) -> dict:
+def summarize(checks: list[Check]) -> dict:
     counts = {s: 0 for s in (STATUS_OK, STATUS_WARN, STATUS_FAIL, STATUS_SKIP)}
     for check in checks:
         counts[check.status] = counts.get(check.status, 0) + 1
@@ -512,14 +516,14 @@ def summarize(checks: List[Check]) -> dict:
 def run_checks(
     run_ai_test: bool = False,
     config=None,
-    status: Optional[dict] = None,
-    anki_call: Callable = None,
-    ai_tester: Callable = None,
-    extra_checks: Optional[List[Callable[[], List[Check]]]] = None,
+    status: dict | None = None,
+    anki_call: Callable | None = None,
+    ai_tester: Callable | None = None,
+    extra_checks: list[Callable[[], list[Check]]] | None = None,
 ) -> dict:
     config = config or get_config()
     status = status if status is not None else gsm_status.to_dict()
-    checks: List[Check] = []
+    checks: list[Check] = []
     checks.extend(check_text_sources(config, status))
     checks.append(check_texthooker(config))
     checks.extend(check_anki(config, anki_call))
@@ -529,7 +533,7 @@ def run_checks(
     for extra in extra_checks or []:
         try:
             checks.extend(extra())
-        except Exception as exc:  # one broken check must not hide the rest
+        except Exception as exc:  # noqa: BLE001 - one broken check must not hide the rest
             logger.debug("Setup check failed to run", exc_info=True)
             checks.append(Check(getattr(extra, "__name__", "extra"), "Extra check", STATUS_FAIL, str(exc)))
     return {
@@ -551,4 +555,10 @@ def register_setup_check_routes(app):
 
     @app.route("/api/setup-check", methods=["GET"])
     def setup_check_api():
-        return jsonify(run_checks(run_ai_test=_truthy(request.args.get("ai_test")))), 200
+        from GameSentenceMiner.util import yomitan_sync
+
+        result = run_checks(
+            run_ai_test=_truthy(request.args.get("ai_test")),
+            extra_checks=[yomitan_sync.setup_checks],
+        )
+        return jsonify(result), 200

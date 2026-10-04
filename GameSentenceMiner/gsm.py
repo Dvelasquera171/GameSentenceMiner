@@ -1473,6 +1473,13 @@ class GSMApplication:
             gsm_cloud_auth_cache_service.start_background_loop()
         cloud_sync_service.start_background_loop()
         self._start_thread(_get_run_text_hooker_page(), "texthooker-page")
+        try:
+            from GameSentenceMiner.util import yomitan_sync
+
+            # Watches %APPDATA%/GameSentenceMiner/yomitan_sync for Firefox Yomitan exports.
+            self._threads.append(yomitan_sync.start_watcher())
+        except Exception as exc:
+            logger.warning(f"Yomitan sync watcher did not start: {exc}")
 
     def handle_ipc_command(self, cmd: dict) -> None:
         logger.debug(f"IPC Command Received: {cmd}")

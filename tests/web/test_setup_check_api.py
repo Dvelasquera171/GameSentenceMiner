@@ -1,3 +1,6 @@
+# GSM's last_line_received is a local wall-clock string.
+# ruff: noqa: DTZ001, DTZ005
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -315,8 +318,9 @@ def client():
 def test_routes(client, monkeypatch):
     seen = []
 
-    def fake_run(run_ai_test=False):
+    def fake_run(run_ai_test=False, extra_checks=None):
         seen.append(run_ai_test)
+        assert extra_checks and extra_checks[0].__name__ == "setup_checks"
         return {"checks": [], "summary": {"counts": {}, "text": ""}, "checked_at": "x", "ai_tested": run_ai_test}
 
     monkeypatch.setattr(setup_check_api, "run_checks", fake_run)

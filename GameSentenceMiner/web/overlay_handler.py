@@ -64,6 +64,10 @@ class OverlayRequestHandler:
                 from GameSentenceMiner.util.anki_yomitan import accept_yomitan_setup_result
 
                 accept_yomitan_setup_result(message)
+            elif message_type in ("yomitan-sync-result", "yomitan-sync-progress"):
+                from GameSentenceMiner.util.yomitan_sync import accept_overlay_message
+
+                accept_overlay_message(message)
             elif message_type == "translate-request":
                 await self.handle_translation_request(message)
             elif message_type == "manual-overlay-scan-request":

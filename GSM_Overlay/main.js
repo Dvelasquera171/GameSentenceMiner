@@ -15,6 +15,7 @@ const WebSocket = require('ws');
 const bg = require('./background');
 const BackendConnector = require('./backend_connector');
 const { configureYomitan, createSetupHandler } = require('./anki_setup');
+const yomitanSync = require('./yomitan_sync');
 const { createMagpieState } = require('./magpie');
 const { JitenParseCache, DEFAULT_JITEN_PARSE_URL: JITEN_DEFAULT_PARSE_URL } = require('./jiten_cache');
 const { installJitenSessionBroker, JitenFrameRequests } = require('./jiten_session');
@@ -2537,6 +2538,15 @@ const handleAnkiSetup = createSetupHandler(
   (response) => { if (backend?.connected) backend.send(response); },
 );
 
+// Firefox Yomitan export -> overlay Yomitan (dictionaries, card formats, lookup settings).
+const handleYomitanSync = yomitanSync.createSyncHandler({
+  syncSettings: (input, deadline) => yomitanSync.syncSettings(BrowserWindow, yomitanExt, input, deadline),
+  importDictionaries: (input, onProgress) => yomitanSync.importDictionaries(BrowserWindow, yomitanExt, input, onProgress),
+  readStatus: () => yomitanSync.readStatus(BrowserWindow, yomitanExt),
+  send: (response) => { if (backend?.connected) backend.send(response); },
+  state: yomitanSync.createFileState(fs, path.join(dataPath, 'yomitan_sync_state.json')),
+});
+
 function handleOverlayWebSocketControlMessage(type, data) {
   if ((type !== "ws2" && type !== "backend-connector") || data === "True" || data === "False") {
     return false;
@@ -2565,6 +2575,11 @@ function handleOverlayWebSocketControlMessage(type, data) {
 
   if (message.type === "anki-setup-yomitan") {
     void handleAnkiSetup(message);
+    return true;
+  }
+
+  if (typeof message.type === "string" && message.type.startsWith("yomitan-sync-")) {
+    void handleYomitanSync(message);
     return true;
   }
 

@@ -294,7 +294,7 @@ Overlay Yomitan: synced from the Firefox export (5 dictionaries, all 3 card form
 ### Owner test (VN, about 10 minutes)
 1. Start GSM only. Home tab: "Open and close with active game", "Start and end a reading session
    with the game" and "Start Anki with the game" should be on.
-2. Run the Text Capture Wizard for Nekopara again (Game Automation → the scene → wizard). Hook step:
+2. Home tab → Active Game Capture card: select Nekopara's scene → **Run Capture Wizard**. Hook step:
    click the line that matches the dialogue → "Next: OCR for pictures and extra boxes". OCR step:
    "OCR on demand (recommended)" is preselected. Save. (Nekopara's old profile says Auto OCR, no hook.)
 3. Start the game. Within a few seconds: Anki opens, the overlay appears, the hook delivers text.

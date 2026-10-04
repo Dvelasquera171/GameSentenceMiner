@@ -5,20 +5,52 @@
 {% include 'components/html-head.html' %}
 
 <body>
+    <style>
+        .rv-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .rv-muted { color: var(--text-tertiary); font-size: 13px; }
+        .rv-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .rv-table th, .rv-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border-color); }
+        .rv-table th { color: var(--text-secondary); font-weight: 600; font-size: 13px; }
+        .rv-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 700; color: #fff; background: var(--text-tertiary); }
+        .rv-pill.done, .rv-pill.correct { background: var(--success-color); }
+        .rv-pill.running, .rv-pill.pending, .rv-pill.partial { background: var(--warning-color); color: #333; }
+        .rv-pill.failed, .rv-pill.incorrect { background: var(--danger-color); }
+        .rv-pill.manual { background: var(--accent-color); }
+        .rv-list { list-style: none; padding: 0; margin: 0; }
+        .rv-list li { padding: 8px 0; border-bottom: 1px solid var(--border-color); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .rv-list li.active { font-weight: 600; }
+        .rv-section { margin-top: 22px; }
+        .rv-section h4 { margin: 0 0 8px; font-size: 18px; }
+        .rv-ja { font-size: 17px; line-height: 1.8; white-space: pre-wrap; user-select: text; }
+        .rv-card { border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; margin: 10px 0; background: var(--bg-secondary); }
+        .rv-quote { font-size: 18px; font-weight: 600; user-select: text; }
+        .rv-reading { margin-top: 6px; line-height: 1.7; }
+        .rv-wrong { color: var(--danger-color); }
+        .rv-right { color: var(--success-color); }
+        details { margin-top: 6px; }
+        details > summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+        .rv-quiz textarea { width: 100%; box-sizing: border-box; margin-top: 8px; font-size: 16px; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); }
+        .rv-grade { margin-top: 10px; padding: 10px; border-left: 3px solid var(--accent-color); background: var(--bg-tertiary); border-radius: 4px; }
+        .rv-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: rv-spin 0.8s linear infinite; vertical-align: middle; }
+        @keyframes rv-spin { to { transform: rotate(360deg); } }
+        .rv-status { margin: 8px 0; }
+        .rv-score { font-size: 18px; font-weight: 700; }
+        .rv-link { background: none; border: none; color: var(--accent-color); cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
+    </style>
     <div class="container">
         <h1>GSM - Session Review</h1>
         {% include 'components/navigation.html' %}
 
-        <!-- Minimal functional scaffold. Layout/polish is tracked in docs/SESSION_REVIEW.md. -->
         <div class="dashboard-card">
             <div class="dashboard-card-header"><h3 class="dashboard-card-title">Sessions</h3></div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
-                <select id="gameSelect"></select>
-                <button id="startSessionBtn">Start session</button>
-                <button id="endSessionBtn">End session</button>
-                <span id="openSessionBadge"></span>
+            <div class="rv-row">
+                <select id="gameSelect" aria-label="Game"></select>
+                <button id="startSessionBtn" class="control-btn" title="Mark the start of a reading session for this game">Start session</button>
+                <button id="endSessionBtn" class="control-btn" title="Close the open session for this game">End session</button>
+                <span id="openSessionBadge" class="rv-muted"></span>
             </div>
-            <table id="sessionsTable" style="width:100%; margin-top:10px;">
+            <p class="rv-muted">Sessions are split where you paused longer than the stats session gap. Manual sessions (Start/End) win over automatic ones.</p>
+            <table id="sessionsTable" class="rv-table">
                 <thead><tr><th>Start</th><th>Duration</th><th>Lines</th><th>Chars</th><th>Source</th><th></th></tr></thead>
                 <tbody></tbody>
             </table>
@@ -26,39 +58,43 @@
 
         <div class="dashboard-card">
             <div class="dashboard-card-header"><h3 class="dashboard-card-title">Reviews</h3></div>
-            <ul id="reviewsList"></ul>
+            <ul id="reviewsList" class="rv-list"></ul>
         </div>
 
         <div class="dashboard-card" id="reviewCard" style="display:none;">
             <div class="dashboard-card-header"><h3 class="dashboard-card-title" id="reviewTitle">Review</h3></div>
-            <div id="reviewStatus"></div>
+            <div id="reviewMeta" class="rv-muted"></div>
+            <div id="reviewStatus" class="rv-status"></div>
 
-            <section id="summarySection">
-                <h4>あらすじ</h4>
-                <div id="summaryJa" lang="ja" style="white-space:pre-wrap;"></div>
-                <details><summary>English</summary><div id="summaryEn" style="white-space:pre-wrap;"></div></details>
-            </section>
+            <div id="reviewBody" style="display:none;">
+                <section class="rv-section">
+                    <h4>あらすじ</h4>
+                    <div id="summaryJa" class="rv-ja" lang="ja"></div>
+                    <details><summary>English</summary><div id="summaryEn" style="white-space:pre-wrap;"></div></details>
+                </section>
 
-            <section id="charactersSection">
-                <h4>登場人物と態度</h4>
-                <ul id="charactersList"></ul>
-            </section>
+                <section class="rv-section" id="charactersSection">
+                    <h4>登場人物と態度</h4>
+                    <div id="charactersList"></div>
+                </section>
 
-            <section id="missedSection">
-                <h4>見逃しやすい点</h4>
-                <ul id="missedJa" lang="ja"></ul>
-                <details><summary>English</summary><ul id="missedEn"></ul></details>
-            </section>
+                <section class="rv-section" id="missedSection">
+                    <h4>見逃しやすい点</h4>
+                    <ul id="missedJa" class="rv-ja" lang="ja"></ul>
+                    <details><summary>English</summary><ul id="missedEn"></ul></details>
+                </section>
 
-            <section id="highlightsSection">
-                <h4>読み間違えやすい表現</h4>
-                <div id="highlightsList"></div>
-            </section>
+                <section class="rv-section">
+                    <h4>読み間違えやすい表現</h4>
+                    <div id="highlightsList"></div>
+                </section>
 
-            <section id="quizSection">
-                <h4>読解クイズ</h4>
-                <div id="quizList"></div>
-            </section>
+                <section class="rv-section">
+                    <h4>読解クイズ <span id="quizScore" class="rv-muted"></span></h4>
+                    <p class="rv-muted">日本語で答えてください。Ctrl+Enter で採点。</p>
+                    <div id="quizList"></div>
+                </section>
+            </div>
         </div>
 
         {% include 'components/settings-modal.html' %}

@@ -1,12 +1,20 @@
-// Session Review page: bare functional scaffold over /api/review/*.
+// Session Review page over /api/review/*.
 // Japanese is shown by default; English lives in <details> so it stays hidden until wanted.
+// Everything Japanese is plain selectable text so Firefox Yomitan works on it.
 (function () {
     const $ = (id) => document.getElementById(id);
-    const state = { gameKey: '', pollTimer: null, reviewId: null };
+    const state = { gameKey: '', pollTimer: null, reviewId: null, review: null, attempts: [] };
 
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fmtTime = (ts) => (ts ? new Date(ts * 1000).toLocaleString() : '');
     const fmtDur = (s) => `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+    const KIND_LABELS = { events: '出来事', speaker_intent: '話し手の意図', meaning_in_context: '文脈での意味', register: '言葉遣い' };
+    const CATEGORY_LABELS = {
+        aspect_modality: 'アスペクト・モダリティ', omitted_subject: '省略された主語', register_attitude: '言葉遣い・態度',
+        particle_nuance: '助詞のニュアンス', negation_scope: '否定の範囲', conditional_counterfactual: '条件・反実仮想',
+        set_phrase: '慣用表現', other: 'その他',
+    };
+    const VERDICT_LABELS = { correct: '正解', partial: '部分点', incorrect: '不正解' };
 
     async function api(path, opts) {
         const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -15,99 +23,264 @@
         return data;
     }
 
+    function showError(target, err) {
+        target.innerHTML = `<span class="rv-wrong">${esc(err.message || err)}</span>`;
+    }
+
+    // ---- sessions -------------------------------------------------------
+
     async function loadGames() {
         const { games } = await api('/api/review/games');
         const sel = $('gameSelect');
-        sel.innerHTML = games.map((g) => `<option value="${esc(g.game_key)}">${esc(g.game_name || g.game_key)} (${g.line_count})</option>`).join('');
+        sel.innerHTML = games.map((g) => `<option value="${esc(g.game_key)}">${esc(g.game_name || g.game_key)} (${g.line_count} lines)</option>`).join('');
+        const wanted = new URLSearchParams(location.search).get('game_key');
+        if (wanted && games.some((g) => g.game_key === wanted)) sel.value = wanted;
         state.gameKey = sel.value;
         sel.onchange = () => { state.gameKey = sel.value; loadSessions(); loadReviews(); };
     }
 
     async function loadSessions() {
-        if (!state.gameKey) return;
-        const { sessions } = await api(`/api/review/sessions?game_key=${encodeURIComponent(state.gameKey)}`);
-        $('sessionsTable').querySelector('tbody').innerHTML = sessions.map((s) => `
-            <tr>
-                <td>${esc(fmtTime(s.start_ts))}</td><td>${esc(fmtDur(s.duration_seconds))}</td>
-                <td>${s.line_count}</td><td>${s.char_count}</td><td>${esc(s.source)}</td>
-                <td><button data-start="${s.start_ts}" data-end="${s.end_ts}" class="genBtn">Generate review</button></td>
-            </tr>`).join('');
-        document.querySelectorAll('.genBtn').forEach((b) => (b.onclick = () => generate(+b.dataset.start, +b.dataset.end)));
-        const { sessions: open } = await api('/api/review/sessions/open');
-        $('openSessionBadge').textContent = open.length ? `Open: ${open.map((o) => o.game_name || o.game_key).join(', ')}` : '';
+        const body = $('sessionsTable').querySelector('tbody');
+        if (!state.gameKey) { body.innerHTML = '<tr><td colspan="6" class="rv-muted">No games with lines yet.</td></tr>'; return; }
+        try {
+            const { sessions } = await api(`/api/review/sessions?game_key=${encodeURIComponent(state.gameKey)}`);
+            body.innerHTML = sessions.length ? sessions.map((s) => `
+                <tr>
+                    <td>${esc(fmtTime(s.start_ts))}</td><td>${esc(fmtDur(s.duration_seconds))}</td>
+                    <td>${s.line_count}</td><td>${s.char_count}</td>
+                    <td><span class="rv-pill ${esc(s.source)}">${esc(s.source)}</span></td>
+                    <td><button class="control-btn genBtn" data-start="${s.start_ts}" data-end="${s.end_ts}">Generate review</button></td>
+                </tr>`).join('') : '<tr><td colspan="6" class="rv-muted">No sessions for this game.</td></tr>';
+            body.querySelectorAll('.genBtn').forEach((b) => (b.onclick = () => generate(+b.dataset.start, +b.dataset.end, b)));
+            const { sessions: open } = await api('/api/review/sessions/open');
+            $('openSessionBadge').textContent = open.length ? `Open session: ${open.map((o) => `${o.game_name || o.game_key} since ${fmtTime(o.start_ts)}`).join(', ')}` : '';
+        } catch (err) { body.innerHTML = `<tr><td colspan="6">${esc(err.message)}</td></tr>`; }
+    }
+
+    async function generate(start, end, button, gameKey = state.gameKey, gameName = '') {
+        if (button) button.disabled = true;
+        try {
+            const { review_id } = await api('/api/review/generate', {
+                method: 'POST',
+                body: JSON.stringify({ game_key: gameKey, start_ts: start, end_ts: end, ...(gameName ? { game_name: gameName } : {}) }),
+            });
+            await loadReviews();
+            openReview(review_id);
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    async function startOrEnd(path, body) {
+        try { await api(path, { method: 'POST', body: JSON.stringify(body) }); await loadSessions(); } catch (err) { alert(err.message); }
+    }
+
+    // ---- review list ----------------------------------------------------
+
+    function statusText(r) {
+        if (r.status === 'running' || r.status === 'pending') return `${r.stage || 'queued'}${r.progress ? ` ${r.progress}` : ''}`;
+        if (r.status === 'failed') return r.error || 'failed';
+        return `${r.question_count ?? (r.quiz || []).length} questions`;
     }
 
     async function loadReviews() {
-        const { reviews } = await api(`/api/review/reviews?game_key=${encodeURIComponent(state.gameKey)}`);
-        $('reviewsList').innerHTML = reviews.map((r) => `
-            <li><a href="#" data-id="${r.id}">${esc(fmtTime(r.start_ts))} → ${esc(fmtTime(r.end_ts))}</a>
-            — ${esc(r.status)}${r.stage ? ` (${esc(r.stage)} ${esc(r.progress)})` : ''}, ${r.question_count} questions</li>`).join('');
-        $('reviewsList').querySelectorAll('a').forEach((a) => (a.onclick = (e) => { e.preventDefault(); openReview(+a.dataset.id); }));
+        const list = $('reviewsList');
+        try {
+            const { reviews } = await api(`/api/review/reviews?game_key=${encodeURIComponent(state.gameKey)}`);
+            list.innerHTML = reviews.length ? reviews.map((r) => `
+                <li class="${r.id === state.reviewId ? 'active' : ''}">
+                    <span class="rv-pill ${esc(r.status)}">${esc(r.status)}</span>
+                    <button class="rv-link openBtn" data-id="${r.id}">${esc(fmtTime(r.start_ts))} → ${esc(fmtTime(r.end_ts))}</button>
+                    <span class="rv-muted">${r.line_count} lines · ${esc(statusText(r))}</span>
+                    ${r.status === 'failed' ? `<button class="control-btn retryBtn" data-id="${r.id}">Retry</button>` : ''}
+                </li>`).join('') : '<li class="rv-muted">No reviews yet. Pick a session above and press Generate review.</li>';
+            list.querySelectorAll('.openBtn').forEach((b) => (b.onclick = () => openReview(+b.dataset.id)));
+            list.querySelectorAll('.retryBtn').forEach((b) => {
+                const r = reviews.find((x) => x.id === +b.dataset.id);
+                b.onclick = () => generate(r.start_ts, r.end_ts, b, r.game_key, r.game_name);
+            });
+        } catch (err) { list.innerHTML = `<li>${esc(err.message)}</li>`; }
     }
 
-    async function generate(start, end) {
-        try {
-            const { review_id } = await api('/api/review/generate', { method: 'POST', body: JSON.stringify({ game_key: state.gameKey, start_ts: start, end_ts: end }) });
-            await loadReviews();
-            openReview(review_id);
-        } catch (err) { alert(err.message); }
-    }
+    // ---- one review -----------------------------------------------------
 
     async function openReview(id) {
         state.reviewId = id;
         clearTimeout(state.pollTimer);
-        const r = await api(`/api/review/reviews/${id}`);
-        $('reviewCard').style.display = '';
+        const card = $('reviewCard');
+        card.style.display = '';
+        let r;
+        try { r = await api(`/api/review/reviews/${id}`); } catch (err) { showError($('reviewStatus'), err); return; }
+        if (state.reviewId !== id) return;
+        state.review = r;
+        history.replaceState(null, '', `?game_key=${encodeURIComponent(r.game_key)}&review=${id}`);
         $('reviewTitle').textContent = `${r.game_name || r.game_key}: ${fmtTime(r.start_ts)} → ${fmtTime(r.end_ts)}`;
-        $('reviewStatus').textContent = r.status === 'done' ? `${r.line_count} lines, ${r.char_count} chars, ${r.model}` : `${r.status}: ${r.stage} ${r.progress} ${r.error || ''}`;
+        $('reviewMeta').textContent = `${r.line_count} lines · ${r.char_count} characters${r.model ? ` · ${r.provider} / ${r.model}` : ''}`;
+        const status = $('reviewStatus');
         if (r.status === 'running' || r.status === 'pending') {
+            $('reviewBody').style.display = 'none';
+            status.innerHTML = `<span class="rv-spinner"></span> Generating: <b>${esc(r.stage || 'queued')}</b> ${esc(r.progress || '')} <span class="rv-muted">(updates every 3 s; you can leave this page)</span>`;
             state.pollTimer = setTimeout(() => openReview(id), 3000);
             return;
         }
+        if (r.status === 'failed') {
+            $('reviewBody').style.display = 'none';
+            status.innerHTML = `<span class="rv-wrong">Failed: ${esc(r.error || 'unknown error')}</span> <button class="control-btn" id="retryOpenBtn">Retry</button>`;
+            $('retryOpenBtn').onclick = (e) => generate(r.start_ts, r.end_ts, e.currentTarget, r.game_key, r.game_name);
+            loadReviews();
+            return;
+        }
+        status.innerHTML = '';
+        try { state.attempts = (await api(`/api/review/reviews/${id}/attempts`)).attempts || []; } catch (_) { state.attempts = []; }
         render(r);
         loadReviews();
     }
 
     function render(r) {
         const extra = Array.isArray(r.highlights) ? { items: r.highlights } : (r.highlights || {});
+        $('reviewBody').style.display = '';
         $('summaryJa').textContent = r.summary_ja || '';
         $('summaryEn').textContent = r.summary_en || '';
-        $('charactersList').innerHTML = (extra.characters || []).map((c) => `<li><b>${esc(c.name)}</b>: <span lang="ja">${esc(c.attitude_ja)}</span><details><summary>English</summary>${esc(c.attitude_en)}</details></li>`).join('');
-        $('missedJa').innerHTML = (extra.may_have_missed_ja || []).map((x) => `<li>${esc(x)}</li>`).join('');
+
+        const characters = extra.characters || [];
+        $('charactersSection').style.display = characters.length ? '' : 'none';
+        $('charactersList').innerHTML = characters.map((c) => `
+            <div class="rv-card">
+                <div lang="ja" class="rv-ja"><b>${esc(c.name)}</b>：${esc(c.attitude_ja)}</div>
+                <details><summary>English</summary>${esc(c.attitude_en)}</details>
+            </div>`).join('');
+
+        const missedJa = extra.may_have_missed_ja || [];
+        $('missedSection').style.display = missedJa.length ? '' : 'none';
+        $('missedJa').innerHTML = missedJa.map((x) => `<li>${esc(x)}</li>`).join('');
         $('missedEn').innerHTML = (extra.may_have_missed_en || []).map((x) => `<li>${esc(x)}</li>`).join('');
-        $('highlightsList').innerHTML = (extra.items || []).map((h) => `
-            <div class="dashboard-card" style="margin:8px 0;">
-                <div lang="ja"><b>${esc(h.quote)}</b> <small>(${esc(h.construction)}, ${esc(h.category)})</small></div>
-                <div lang="ja">✗ ${esc(h.naive_reading_ja)}<br>✓ ${esc(h.correct_reading_ja)}</div>
-                <details><summary>English</summary>✗ ${esc(h.naive_reading_en)}<br>✓ ${esc(h.correct_reading_en)}<br><i>${esc(h.why_it_matters_en)}</i></details>
-            </div>`).join('');
-        $('quizList').innerHTML = (r.quiz || []).map((q, i) => `
-            <div class="dashboard-card" style="margin:8px 0;" data-qid="${esc(q.id)}">
-                <div lang="ja"><b>Q${i + 1}.</b> ${esc(q.question_ja)} <small>[${esc(q.kind)}]</small></div>
-                ${q.hint_ja ? `<details><summary>ヒント</summary><span lang="ja">${esc(q.hint_ja)}</span></details>` : ''}
-                <textarea lang="ja" rows="2" style="width:100%;" placeholder="日本語で答えてください"></textarea>
-                <button class="gradeBtn">採点</button>
-                <div class="gradeResult"></div>
-            </div>`).join('');
-        document.querySelectorAll('.gradeBtn').forEach((b) => (b.onclick = () => grade(b.closest('[data-qid]'))));
+
+        const items = extra.items || [];
+        $('highlightsList').innerHTML = items.length ? items.map((h, i) => `
+            <div class="rv-card">
+                <div class="rv-quote" lang="ja">${esc(h.quote)}</div>
+                <div class="rv-muted">${esc(h.construction)} · ${esc(CATEGORY_LABELS[h.category] || h.category)}${h.confidence ? ` · confidence ${esc(h.confidence)}` : ''}</div>
+                <div class="rv-reading" lang="ja">
+                    <div class="rv-wrong">✗ ${esc(h.naive_reading_ja)}</div>
+                    <div class="rv-right">✓ ${esc(h.correct_reading_ja)}</div>
+                </div>
+                <details><summary>English</summary>
+                    <div class="rv-wrong">✗ ${esc(h.naive_reading_en)}</div>
+                    <div class="rv-right">✓ ${esc(h.correct_reading_en)}</div>
+                    <div><i>${esc(h.why_it_matters_en)}</i></div>
+                </details>
+                <div class="rv-row" style="margin-top:6px;">
+                    <button class="rv-link copyBtn" data-index="${i}">Copy line</button>
+                    <a class="rv-link" href="/search?q=${encodeURIComponent(h.quote || '')}" target="_blank" rel="noreferrer">Find in Search</a>
+                </div>
+            </div>`).join('') : '<p class="rv-muted">No highlights in this session.</p>';
+        $('highlightsList').querySelectorAll('.copyBtn').forEach((b) => (b.onclick = async () => {
+            try { await navigator.clipboard.writeText(items[+b.dataset.index].quote || ''); b.textContent = 'Copied'; } catch (_) { b.textContent = 'Copy failed'; }
+            setTimeout(() => (b.textContent = 'Copy line'), 1500);
+        }));
+
+        renderQuiz(r);
+    }
+
+    function attemptsFor(qid) {
+        return state.attempts.filter((a) => String(a.question_id) === String(qid));
+    }
+
+    function renderScore(r) {
+        const quiz = r.quiz || [];
+        const best = quiz.map((q) => Math.max(-1, ...attemptsFor(q.id).map((a) => Number(a.grade?.score ?? -1))));
+        const answered = best.filter((s) => s >= 0);
+        $('quizScore').textContent = quiz.length
+            ? `回答済み ${answered.length}/${quiz.length}${answered.length ? ` · 平均 ${Math.round(answered.reduce((a, b) => a + b, 0) / answered.length)}点` : ''}`
+            : '';
+    }
+
+    function gradeHtml(g, q) {
+        const fixes = (g.japanese_fixes || []).map((f) => `
+            <div lang="ja">✎ <span class="rv-wrong">${esc(f.original)}</span> → <span class="rv-right">${esc(f.fixed)}</span></div>
+            ${f.note_en ? `<details><summary>English</summary>${esc(f.note_en)}</details>` : ''}`).join('');
+        return `
+            <div><span class="rv-pill ${esc(g.verdict)}">${esc(VERDICT_LABELS[g.verdict] || g.verdict)}</span> <span class="rv-score">${esc(g.score)}点</span></div>
+            <div class="rv-ja" lang="ja" style="margin-top:6px;">${esc(g.feedback_ja)}</div>
+            ${fixes}
+            <details><summary>English</summary>${esc(g.feedback_en)}</details>
+            <details><summary>模範解答</summary><div class="rv-ja" lang="ja">${esc(g.model_answer_ja)}</div></details>
+            ${q && q.reference_answer_ja ? `<details><summary>参考解答</summary><div class="rv-ja" lang="ja">${esc(q.reference_answer_ja)}</div>
+                ${q.reference_answer_en ? `<details><summary>English</summary>${esc(q.reference_answer_en)}</details>` : ''}</details>` : ''}`;
+    }
+
+    function historyHtml(qid) {
+        const past = attemptsFor(qid);
+        if (!past.length) return '';
+        return `<details class="pastAttempts"><summary>過去の解答 (${past.length})</summary>${past.map((a) => `
+            <div class="rv-card">
+                <div class="rv-muted">${esc(fmtTime(a.created_at))} · <span class="rv-pill ${esc(a.grade?.verdict)}">${esc(VERDICT_LABELS[a.grade?.verdict] || a.grade?.verdict || '')}</span> ${esc(a.grade?.score ?? '')}点</div>
+                <div class="rv-ja" lang="ja">${esc(a.answer)}</div>
+            </div>`).join('')}</details>`;
+    }
+
+    function renderQuiz(r) {
+        const quiz = r.quiz || [];
+        $('quizList').innerHTML = quiz.length ? quiz.map((q, i) => {
+            const last = attemptsFor(q.id).slice(-1)[0];
+            return `
+            <div class="rv-card rv-quiz" data-qid="${esc(q.id)}">
+                <div class="rv-ja" lang="ja"><b>Q${i + 1}.</b> ${esc(q.question_ja)} <span class="rv-muted">［${esc(KIND_LABELS[q.kind] || q.kind)}］</span></div>
+                ${q.hint_ja ? `<details><summary>ヒント</summary><span class="rv-ja" lang="ja">${esc(q.hint_ja)}</span></details>` : ''}
+                <textarea lang="ja" rows="3" placeholder="日本語で答えてください"></textarea>
+                <div class="rv-row" style="margin-top:6px;">
+                    <button class="control-btn gradeBtn">採点</button>
+                    <span class="gradeBusy rv-muted"></span>
+                </div>
+                <div class="gradeResult">${last ? `<div class="rv-grade">${gradeHtml(last.grade || {}, q)}</div>` : ''}</div>
+                <div class="gradeHistory">${historyHtml(q.id)}</div>
+            </div>`;
+        }).join('') : '<p class="rv-muted">No quiz questions.</p>';
+        $('quizList').querySelectorAll('.rv-quiz').forEach((card) => {
+            card.querySelector('.gradeBtn').onclick = () => grade(card);
+            card.querySelector('textarea').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); grade(card); }
+            });
+        });
+        renderScore(r);
     }
 
     async function grade(card) {
         const answer = card.querySelector('textarea').value.trim();
+        const button = card.querySelector('.gradeBtn');
+        const busy = card.querySelector('.gradeBusy');
         const out = card.querySelector('.gradeResult');
-        if (!answer) return;
-        out.textContent = '採点中…';
+        if (!answer || button.disabled) return;
+        const reviewId = state.reviewId;
+        const q = (state.review?.quiz || []).find((x) => String(x.id) === card.dataset.qid);
+        button.disabled = true;
+        busy.innerHTML = '<span class="rv-spinner"></span> 採点中…';
         try {
-            const { grade: g } = await api(`/api/review/reviews/${state.reviewId}/grade`, { method: 'POST', body: JSON.stringify({ question_id: card.dataset.qid, answer }) });
-            out.innerHTML = `<div><b>${esc(g.verdict)}</b> (${g.score})</div><div lang="ja">${esc(g.feedback_ja)}</div>
-                ${(g.japanese_fixes || []).map((f) => `<div lang="ja">✎ ${esc(f.original)} → ${esc(f.fixed)} <details><summary>why</summary>${esc(f.note_en)}</details></div>`).join('')}
-                <details><summary>English</summary>${esc(g.feedback_en)}</details>
-                <details><summary>模範解答</summary><span lang="ja">${esc(g.model_answer_ja)}</span></details>`;
-        } catch (err) { out.textContent = err.message; }
+            const { grade: g, attempt_id } = await api(`/api/review/reviews/${reviewId}/grade`, { method: 'POST', body: JSON.stringify({ question_id: card.dataset.qid, answer }) });
+            if (state.reviewId !== reviewId) return;
+            state.attempts.push({ id: attempt_id, question_id: card.dataset.qid, answer, grade: g, created_at: Date.now() / 1000 });
+            out.innerHTML = `<div class="rv-grade">${gradeHtml(g, q)}</div>`;
+            card.querySelector('.gradeHistory').innerHTML = historyHtml(card.dataset.qid);
+            renderScore(state.review);
+        } catch (err) {
+            showError(out, err);
+        } finally {
+            button.disabled = false;
+            busy.textContent = '';
+        }
     }
 
-    $('startSessionBtn').onclick = async () => { try { await api('/api/review/sessions/start', { method: 'POST', body: JSON.stringify({ game_key: state.gameKey, game_name: $('gameSelect').selectedOptions[0]?.text }) }); loadSessions(); } catch (e) { alert(e.message); } };
-    $('endSessionBtn').onclick = async () => { try { await api('/api/review/sessions/end', { method: 'POST', body: JSON.stringify({ game_key: state.gameKey }) }); loadSessions(); } catch (e) { alert(e.message); } };
+    $('startSessionBtn').onclick = () => startOrEnd('/api/review/sessions/start', { game_key: state.gameKey, game_name: $('gameSelect').selectedOptions[0]?.text.replace(/ \(\d+ lines\)$/, '') });
+    $('endSessionBtn').onclick = () => startOrEnd('/api/review/sessions/end', { game_key: state.gameKey });
 
-    loadGames().then(() => { loadSessions(); loadReviews(); }).catch((e) => alert(e.message));
+    loadGames()
+        .then(() => {
+            loadSessions();
+            loadReviews();
+            const wanted = Number(new URLSearchParams(location.search).get('review'));
+            if (wanted) openReview(wanted);
+        })
+        .catch((err) => alert(err.message));
 })();

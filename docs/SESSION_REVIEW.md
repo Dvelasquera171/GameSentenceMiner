@@ -4,6 +4,10 @@ Status: **foundation laid, UI and integrations open.** This document is the road
 whoever picks this up next (a local coding agent included). Read it together with
 `docs/AI_AGENT_MAP.md`.
 
+**Ordering note (2026-10-04):** the overall roadmap now lives in [ECOSYSTEM.md](ECOSYSTEM.md).
+Session Review (sections A/B/C below) runs after the setup health page (E), the Yomitan sync (Y)
+and the AI-help extension (Q). Section D and E below are superseded by ECOSYSTEM.md.
+
 ## Why
 
 The owner's biggest immersion risk is the *silent misreading*: a construction read

@@ -385,7 +385,13 @@
       "automationManual": "手動OCRを起動",
       "automationManualDescription": "OCRを待機させ、操作またはホットキーを使ったときだけスキャンします。",
       "automationAuto": "自動OCRを起動",
-      "automationAutoDescription": "ゲームがアクティブな間、選択範囲を継続的にスキャンします。"
+      "automationAutoDescription": "ゲームがアクティブな間、選択範囲を継続的にスキャンします。",
+      "hookManual": "必要なときだけOCR（おすすめ）",
+      "hookManualDescription": "テキストはフックから正確に取得します。フックが拾えない画像、メニュー、テキストボックスはOCRホットキーで読み取ります。",
+      "hookNone": "OCRなし",
+      "hookNoneDescription": "フックだけを使います。OCRはOCRタブからいつでも自分で起動できます。",
+      "hookAuto": "自動OCR（フックとの併用は非推奨）",
+      "hookAutoDescription": "フックと並行して画面を常にスキャンします。重複や誤認識の行が増え、CPUも多く使います。"
     },
     "profile": {
       "title": "このゲームの設定を仕上げる",
@@ -432,13 +438,13 @@
     },
     "guided": {
       "captureNext": "キャプチャを確認してテキスト選択へ",
-      "hookNext": "OCRへ進む",
+      "hookNext": "次へ：画像や追加のテキスト用のOCR",
       "finalize": "仕上げへ進む",
       "saveAndClose": "保存して閉じる",
       "skipOcr": "OCRをスキップして仕上げる",
       "ocrOptional": "テキストフックを選択済みです。OCRをスキップするか、フックで取得できないテキスト用に設定できます。",
       "ocrGuide": "会話の範囲を選択し、サンプルを確認して、OCRを実行するタイミングを選んでください。",
-      "hookGuide": "1. エンジンを起動します。2. ゲームの会話を進めます。3. 画面と一致するテキストを選択します。",
+      "hookGuide": "1. エンジンを起動します。2. ゲームの会話を進めます。3. 画面のセリフと一致する行をクリックし、「このフックを使って次へ」を押します。",
       "vnTitle": "Luna / Textractor · ビジュアルノベルにおすすめ",
       "agentTitle": "Agent · ゲーム専用スクリプト",
       "agentDescription": "Agentは特定のゲーム用に作成されたスクリプトを使用します。必要なスクリプトがわかっている場合は、手動で検索できます。",
@@ -460,7 +466,10 @@
       "agentStart": "スクリプトを起動",
       "agentRunning": "Agentは実行中です。会話を進めて取得したテキストを確認してください。",
       "usingSaved": "保存済みの設定を読み込みました。変更したいステップに移動できます。",
-      "otherGameRunning": "{exe} のテキストフックが実行中です。このゲーム用のフックを起動する前に停止してください。"
+      "otherGameRunning": "{exe} のテキストフックが実行中です。このゲーム用のフックを起動する前に停止してください。",
+      "useHookAndContinue": "このフックを使って次へ",
+      "noHookUseOcr": "このゲームはフックできない：OCRを使う",
+      "hookVsOcr": "フックはゲームから正確なテキストを直接読み取ります。OCRは画面の画像から文字を読み取り、フックできないゲームの代わりの手段です。ビジュアルノベルならここでフックを選んでください。画像や追加のテキストボックスには、OCRをホットキーでいつでも使えます。"
     }
   },
   "install": {

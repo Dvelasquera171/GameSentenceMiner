@@ -135,6 +135,17 @@ const OCR_AUTOMATION_OPTIONS: Array<{
   }
 ];
 
+// With a working hook, OCR is a helper for pictures and extra boxes: on demand first, continuous last.
+const HOOK_OCR_OPTIONS: Array<{
+  value: SceneOcrMode;
+  labelKey: string;
+  descriptionKey: string;
+}> = [
+  { value: "manual", labelKey: "captureWizard.ocr.hookManual", descriptionKey: "captureWizard.ocr.hookManualDescription" },
+  { value: "none", labelKey: "captureWizard.ocr.hookNone", descriptionKey: "captureWizard.ocr.hookNoneDescription" },
+  { value: "auto", labelKey: "captureWizard.ocr.hookAuto", descriptionKey: "captureWizard.ocr.hookAutoDescription" }
+];
+
 const DEFAULT_FLUSH_DELAY_MS = 100;
 const NEW_PROFILE_VALUE = "__new__";
 
@@ -232,6 +243,8 @@ export function TextCaptureWizard({
   const preserveLegacyHook = !textSourceChanged && !savedHookProfile && !!savedSceneProfile && savedSceneProfile.textHookMode !== "none";
   const runtimeMatchesCapture = hookStatus.running && !!exeName &&
     hookStatus.exeName.toLowerCase() === exeName.toLowerCase();
+  const hookStepCanAccept = step === "hook" && !hasTextHook && !!selectedHook && runtimeMatchesCapture &&
+    hookStatus.engine !== "agent";
   const recommendedAgent = useMemo(
     () => getHighConfidenceAgentScriptCandidate(agentCandidates, { isSwitchTarget }),
     [agentCandidates, isSwitchTarget]
@@ -579,7 +592,10 @@ export function TextCaptureWizard({
           setAcceptedHook({ id: hook.id, function: hook.function });
           setTextSource(hookStatus.engine);
           setTextSourceChanged(true);
-          if (!hasTextHook) setLaunchTextHook(true);
+          if (!hasTextHook) {
+            setLaunchTextHook(true);
+            setOcrMode("manual");
+          }
         }
       } catch {
         setStatusMessage(t("captureWizard.hook.refreshFailed"));
@@ -593,6 +609,7 @@ export function TextCaptureWizard({
     setTextSource("agent");
     setTextSourceChanged(true);
     if (!hasTextHook) setLaunchTextHook(true);
+    setOcrMode("manual");
     setStep("ocr");
   }, [hasTextHook]);
 
@@ -621,6 +638,7 @@ export function TextCaptureWizard({
     setTextSourceChanged(true);
     setAcceptedHook({ id: selectedHook.id, function: selectedHook.function });
     if (!hasTextHook) setLaunchTextHook(true);
+    setOcrMode("manual");
     setStep("ocr");
   }, [hasTextHook, hookStatus, runtimeMatchesCapture, selectedHook]);
 
@@ -973,6 +991,7 @@ export function TextCaptureWizard({
                 <h3>{t("captureWizard.hook.title")}</h3>
                 <p>{t("captureWizard.hook.description")}</p>
               </div>
+              <div className="capture-wizard-note">{t("captureWizard.guided.hookVsOcr")}</div>
               <div className="capture-wizard-methods">
               <div className="capture-wizard-method">
                 <h4>{t("captureWizard.guided.vnTitle")}</h4>
@@ -1143,7 +1162,7 @@ export function TextCaptureWizard({
                 <legend>{t("captureWizard.ocr.automationTitle")}</legend>
                 <p>{t("captureWizard.ocr.automationDescription")}</p>
                 <div className="capture-wizard-ocr-automation-options">
-                  {OCR_AUTOMATION_OPTIONS.map((option) => (
+                  {(hasTextHook ? HOOK_OCR_OPTIONS : OCR_AUTOMATION_OPTIONS).map((option) => (
                     <label
                       key={option.value}
                       className={ocrMode === option.value ? "capture-wizard-ocr-automation-option--selected" : ""}
@@ -1180,7 +1199,7 @@ export function TextCaptureWizard({
                     setStep("finish");
                   }}
                 >
-                  {t("captureWizard.guided.useOcr")}
+                  {t("captureWizard.guided.noHookUseOcr")}
                 </button>
               </div> : null}
             </section>
@@ -1315,6 +1334,11 @@ export function TextCaptureWizard({
                 disabled={contextLoading || hookBusy || (step === "preview" && !activeScene)}
                 onClick={() => {
                   setStatusMessage(null);
+                  // A clicked line counts as the hook; "Continue" must never switch the game to OCR by accident.
+                  if (hookStepCanAccept) {
+                    acceptHook();
+                    return;
+                  }
                   if (step === "ocr" && !hasTextHook) {
                     setTextSource("ocr");
                     setTextSourceChanged(true);
@@ -1323,7 +1347,15 @@ export function TextCaptureWizard({
                   setStep(CAPTURE_WIZARD_STEPS[stepIndex + 1].id);
                 }}
               >
-                {t(step === "preview" ? "captureWizard.guided.captureNext" : step === "hook" ? "captureWizard.guided.hookNext" : hasTextHook ? "captureWizard.guided.keepHook" : "captureWizard.guided.useOcr")}
+                {t(step === "preview"
+                  ? "captureWizard.guided.captureNext"
+                  : step === "hook"
+                    ? hasTextHook
+                      ? "captureWizard.guided.hookNext"
+                      : hookStepCanAccept
+                        ? "captureWizard.guided.useHookAndContinue"
+                        : "captureWizard.guided.noHookUseOcr"
+                    : hasTextHook ? "captureWizard.guided.keepHook" : "captureWizard.guided.useOcr")}
               </button>
             ) : (
               <button type="button" disabled={saving || assigningProfile || contextLoading || contextFailed || !activeScene} onClick={() => void saveProfileChoices()}>

@@ -391,7 +391,13 @@
       "automationManual": "Start Manual OCR",
       "automationManualDescription": "Keep OCR ready and scan only from a control or hotkey.",
       "automationAuto": "Start Auto OCR",
-      "automationAutoDescription": "Continuously scan the selected area while the game is active."
+      "automationAutoDescription": "Continuously scan the selected area while the game is active.",
+      "hookManual": "OCR on demand (recommended)",
+      "hookManualDescription": "The hook gives the exact text. Press the OCR hotkey to read a picture, a menu or a box the hook misses.",
+      "hookNone": "No OCR",
+      "hookNoneDescription": "Only the hook. You can still start OCR yourself from the OCR tab.",
+      "hookAuto": "Auto OCR (not recommended with a hook)",
+      "hookAutoDescription": "Scans the screen all the time next to the hook: duplicate or misread lines, and more CPU."
     },
     "profile": {
       "title": "Finalize this game setup",
@@ -438,13 +444,13 @@
     },
     "guided": {
       "captureNext": "Capture looks right — choose text",
-      "hookNext": "Continue to OCR",
+      "hookNext": "Next: OCR for pictures and extra boxes",
       "finalize": "Continue to Finalize",
       "saveAndClose": "Save and close",
       "skipOcr": "Skip OCR and finalize",
       "ocrOptional": "Your text hook is selected. You can skip OCR, or set it up for text the hook misses.",
       "ocrGuide": "Select the dialogue area, check the sample, then choose when OCR runs.",
-      "hookGuide": "1. Start an engine. 2. Advance dialogue in your game. 3. Select the text that matches.",
+      "hookGuide": "1. Start an engine. 2. Advance dialogue in your game. 3. Click the line that matches the dialogue on screen, then press Use this hook and continue.",
       "vnTitle": "Luna / Textractor · Best for visual novels",
       "agentTitle": "Agent · Game-specific scripts",
       "agentDescription": "Agent uses a script written for a specific game. Search manually if you already know which script you need.",
@@ -466,7 +472,10 @@
       "agentStart": "Start script",
       "agentRunning": "Agent is running. Advance dialogue to check the captured text.",
       "usingSaved": "Your saved setup is loaded. Jump to a step to adjust it.",
-      "otherGameRunning": "A text hook is running for {exe}. Stop it before starting one for this game."
+      "otherGameRunning": "A text hook is running for {exe}. Stop it before starting one for this game.",
+      "useHookAndContinue": "Use this hook and continue",
+      "noHookUseOcr": "This game can't be hooked: use OCR",
+      "hookVsOcr": "A hook reads the exact text straight from the game. OCR reads text from the screen picture and is the fallback for games that can't be hooked. For a visual novel, pick a hook here; OCR stays available on a hotkey for pictures and extra text boxes."
     }
   },
   "install": {

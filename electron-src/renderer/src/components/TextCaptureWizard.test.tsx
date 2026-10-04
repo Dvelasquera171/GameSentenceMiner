@@ -192,8 +192,9 @@ describe("TextCaptureWizard", () => {
     expect(findButton(container, "Capture looks right — choose text")).toBeInstanceOf(HTMLButtonElement);
 
     await clickButton(container, "Capture looks right — choose text");
-    expect(findButton(container, "Continue to OCR")).toBeInstanceOf(HTMLButtonElement);
-    await clickButton(container, "Continue to OCR");
+    // Without a hook the only way forward says plainly that the game will use OCR.
+    expect(findButton(container, "This game can't be hooked: use OCR")).toBeInstanceOf(HTMLButtonElement);
+    await clickButton(container, "This game can't be hooked: use OCR");
     expect(findButton(container, "Use OCR and finalize")).toBeInstanceOf(HTMLButtonElement);
 
     const reviewStep = crumbs.find(
@@ -351,7 +352,8 @@ describe("TextCaptureWizard", () => {
     expect(invokeMock).toHaveBeenCalledWith("settings.saveSceneLaunchProfile", {
       scene,
       textHookMode: "none",
-      ocrMode: "none",
+      // A hooked game keeps OCR ready on demand for pictures and extra boxes.
+      ocrMode: "manual",
       launchOverlay: false,
       agentScriptPath: "",
       launchDelaySeconds: 0,
@@ -751,7 +753,7 @@ describe("TextCaptureWizard", () => {
     expect(findButton(container, "Keep text hook and finalize")).toBeInstanceOf(HTMLButtonElement);
     expect(invokeMock).not.toHaveBeenCalledWith("texthook.saveProfile", expect.anything());
 
-    await clickButton(container, "Use OCR and finalize");
+    await clickButton(container, "This game can't be hooked: use OCR");
     expect(container.querySelector(".capture-wizard-summary")?.textContent).toContain("OCR");
     await clickButton(container, "Save and close");
 
@@ -945,7 +947,7 @@ describe("TextCaptureWizard", () => {
 
   it.each([
     { navigation: "Finalize", steps: ["Finalize"] },
-    { navigation: "the remaining steps", steps: ["Continue to OCR", "Keep text hook and finalize"] },
+    { navigation: "the remaining steps", steps: ["Next: OCR for pictures and extra boxes", "Keep text hook and finalize"] },
   ])("saves a manually selected Agent script without starting it via $navigation", async ({ steps }) => {
     const scriptPath = "C:\\Agent\\data\\scripts\\PC_Steam_Picked_Adventure.js";
     mockSceneContext({
@@ -1078,7 +1080,7 @@ describe("TextCaptureWizard", () => {
     await clickButton(container, "Texthook");
     await clickButton(container, selectedHook.preview);
     expect(invokeMock).toHaveBeenCalledWith("texthook.selectHook", selectedHook.id);
-    await clickButton(container, "Continue to OCR");
+    await clickButton(container, "Next: OCR for pictures and extra boxes");
     expect(findButton(container, "Keep text hook and finalize")).toBeInstanceOf(HTMLButtonElement);
     await clickButton(container, "Finalize");
     await clickButton(container, "Save and close");
@@ -1086,6 +1088,36 @@ describe("TextCaptureWizard", () => {
     expect(onClose).toHaveBeenCalledOnce();
     expect(invokeMock).toHaveBeenCalledWith("texthook.saveProfile", expect.objectContaining({
       engine: "textractor", hookId: selectedHook.id, hookFunction: selectedHook.function, autoHook: true,
+    }));
+  });
+
+  it("recommends OCR on demand once a hook is chosen and saves it", async () => {
+    const selectedHook = { id: "dialogue-hook", function: "Dialogue text", preview: "選んだ会話", samples: ["選んだ会話"] };
+    mockSceneContext({
+      "texthook.getStatus": {
+        running: true, engine: "luna", exeName: "ExampleGame.exe", pid: 123, arch: "x64",
+        selectedHookId: null, hookCount: 1,
+      },
+      "texthook.listHooks": { hooks: [selectedHook], selectedHookId: null },
+      "texthook.selectHook": { success: true },
+    });
+    await renderWizard();
+    await clickButton(container, "Texthook");
+    expect(container.textContent).toContain("A hook reads the exact text straight from the game.");
+    await clickButton(container, selectedHook.preview);
+    await clickButton(container, "Next: OCR for pictures and extra boxes");
+
+    const options = Array.from(container.querySelectorAll<HTMLInputElement>('input[name="capture-wizard-ocr-automation"]'));
+    expect(options.map((input) => input.value)).toEqual(["manual", "none", "auto"]);
+    expect(options.find((input) => input.checked)?.value).toBe("manual");
+    expect(container.textContent).toContain("OCR on demand (recommended)");
+    expect(container.textContent).toContain("Auto OCR (not recommended with a hook)");
+
+    await clickButton(container, "Keep text hook and finalize");
+    await clickButton(container, "Save and close");
+    expect(invokeMock).toHaveBeenCalledWith("settings.saveSceneLaunchProfile", expect.objectContaining({ ocrMode: "manual" }));
+    expect(invokeMock).toHaveBeenCalledWith("texthook.saveProfile", expect.objectContaining({
+      engine: "luna", hookId: selectedHook.id, autoHook: true,
     }));
   });
 });

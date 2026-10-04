@@ -8,6 +8,8 @@ import {
 import { getOCRRuntimeState, startManualOCR, startOCR, stopOCR } from './ui/ocr.js';
 import { adoptStartupOverlayForAutomation, getOverlayRuntimeState, runOverlayWithSource, stopOverlay } from './ui/front.js';
 import { activeGame } from './active_game.js';
+import { GameSessionAutomation } from './game_session_automation.js';
+import { gsmBackendUrl } from './gsm_config.js';
 import {
     getAgentPath,
     getAgentScriptsPath,
@@ -30,6 +32,7 @@ import {
     upsertSceneLaunchProfile
 } from './store.js';
 import type { SceneLaunchProfile, SceneOcrMode, SceneTextHookMode } from './store.js';
+import { getAnkiPath, getLaunchAnkiWithGame, getStartReadingSessionWithGame } from './store.js';
 import { exec, execFile, ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -49,6 +52,34 @@ import {
 import { findLinuxGamePid } from './ui/linux_wine.js';
 
 type IntegratedTextHookEngine = "textractor" | "luna" | "agent" | "mages";
+
+function isWindowsProcessRunning(exeName: string): Promise<boolean> {
+    if (process.platform !== "win32") return Promise.resolve(false);
+    return new Promise((resolve) => {
+        execFile('tasklist', ['/FI', `IMAGENAME eq ${exeName}`, '/FO', 'CSV', '/NH'], (error, stdout) => {
+            resolve(!error && stdout.toLowerCase().includes(exeName.toLowerCase()));
+        });
+    });
+}
+
+// Reading session + Anki follow the active game (Home tab switches).
+const gameSessionAutomation = new GameSessionAutomation({
+    getSettings: () => ({
+        startReadingSession: getStartReadingSessionWithGame(),
+        launchAnki: getLaunchAnkiWithGame(),
+        ankiPath: getAnkiPath(),
+    }),
+    backendUrl: gsmBackendUrl,
+    fetch: (url, init) => fetch(url, init),
+    fileExists: (filePath) => fs.existsSync(filePath),
+    isProcessRunning: isWindowsProcessRunning,
+    launchDetached: (filePath) => {
+        const child = spawn(filePath, [], { detached: true, stdio: 'ignore', cwd: path.dirname(filePath) });
+        child.unref();
+    },
+    env: process.env,
+    log: (message) => console.log(message),
+});
 
 export class AutoLauncher {
     private intervalId: NodeJS.Timeout | null = null;
@@ -583,6 +614,9 @@ export class AutoLauncher {
         try {
             const scene = await this.resolveCurrentScene();
             if (generation === this.pollingGeneration) await this.runOverlayAutomation(scene);
+            if (generation === this.pollingGeneration) {
+                await gameSessionAutomation.update(scene?.name ?? null, scene ? activeGame.get(scene.name) : null);
+            }
         } catch (error) {
             this.errorInternal('[AutoLauncher:Overlay] poll error:', error);
         } finally {

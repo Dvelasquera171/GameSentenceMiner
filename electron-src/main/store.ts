@@ -183,6 +183,9 @@ interface StoreConfig {
     runWindowTransparencyToolOnStartup: boolean; // Whether to run the transparency tool on startup
     runOverlayOnStartup: boolean; // Whether to run the overlay on startup
     runOverlayWithActiveGame: boolean;
+    startReadingSessionWithGame: boolean; // Start/end a Session Review reading session with the game
+    launchAnkiWithGame: boolean; // Start Anki when a game becomes active
+    ankiPath: string; // anki.exe; empty = standard install locations
     quitOnWindowClose: boolean; // Whether the main window X button quits instead of hiding to tray
     textCaptureWizardEnabled: boolean; // Whether to show the text capture wizard after capture setup
     obsOcrScenes: string[];
@@ -328,6 +331,9 @@ export const store = new Store<StoreConfig>({
         runWindowTransparencyToolOnStartup: false, // Whether to run the transparency tool on startup
         runOverlayOnStartup: false, // Whether to run the overlay on startup
         runOverlayWithActiveGame: false,
+        startReadingSessionWithGame: true,
+        launchAnkiWithGame: true,
+        ankiPath: '',
         quitOnWindowClose: false,
         textCaptureWizardEnabled: true,
         obsOcrScenes: [],
@@ -877,6 +883,30 @@ export function getRunOverlayWithActiveGame(): boolean {
 export function setRunOverlayWithActiveGame(run: boolean): void {
     if (run) store.set("runOverlayOnStartup", false);
     store.set("runOverlayWithActiveGame", run);
+}
+
+export function getStartReadingSessionWithGame(): boolean {
+    return store.get("startReadingSessionWithGame", true);
+}
+
+export function setStartReadingSessionWithGame(enabled: boolean): void {
+    store.set("startReadingSessionWithGame", enabled);
+}
+
+export function getLaunchAnkiWithGame(): boolean {
+    return store.get("launchAnkiWithGame", true);
+}
+
+export function setLaunchAnkiWithGame(enabled: boolean): void {
+    store.set("launchAnkiWithGame", enabled);
+}
+
+export function getAnkiPath(): string {
+    return store.get("ankiPath", "") || "";
+}
+
+export function setAnkiPath(ankiPath: string): void {
+    store.set("ankiPath", ankiPath.trim());
 }
 
 export function getQuitOnWindowClose(): boolean {

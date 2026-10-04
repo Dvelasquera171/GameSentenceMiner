@@ -91,6 +91,12 @@
       "cancel": "Cancel",
       "confirm": "Rename"
     },
+    "gameStart": {
+      "session": "Start and end a reading session with the game",
+      "sessionTooltip": "A reading session (for Session Review) starts when the game becomes active and ends when you close it or switch games. No Start/End clicks needed.",
+      "anki": "Start Anki with the game",
+      "ankiTooltip": "Opens Anki when a game becomes active, if it is not already running. Uses the standard Anki install location."
+    },
     "overlay": {
       "title": "Overlay",
       "statusRunning": "Running",

@@ -318,6 +318,8 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
   const [overlayRunning, setOverlayRunning] = useState(false);
   const [runOverlayOnStartup, setRunOverlayOnStartup] = useState(false);
   const [runOverlayWithActiveGame, setRunOverlayWithActiveGame] = useState(false);
+  const [startReadingSessionWithGame, setStartReadingSessionWithGame] = useState(true);
+  const [launchAnkiWithGame, setLaunchAnkiWithGame] = useState(true);
   const [overlaySettingsSaving, setOverlaySettingsSaving] = useState(false);
   const [overlaySettingsLoaded, setOverlaySettingsLoaded] = useState(false);
   const [overlaySettingsError, setOverlaySettingsError] = useState(false);
@@ -359,11 +361,18 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
     let cancelled = false;
 
     setOverlaySettingsLoaded(false);
-    void invokeIpc<{ runOverlayOnStartup?: boolean; runOverlayWithActiveGame?: boolean }>("settings.getSettings")
+    void invokeIpc<{
+      runOverlayOnStartup?: boolean;
+      runOverlayWithActiveGame?: boolean;
+      startReadingSessionWithGame?: boolean;
+      launchAnkiWithGame?: boolean;
+    }>("settings.getSettings")
       .then((settings) => {
         if (!cancelled) {
           setRunOverlayOnStartup(settings?.runOverlayOnStartup === true);
           setRunOverlayWithActiveGame(settings?.runOverlayWithActiveGame === true);
+          setStartReadingSessionWithGame(settings?.startReadingSessionWithGame !== false);
+          setLaunchAnkiWithGame(settings?.launchAnkiWithGame !== false);
           setOverlaySettingsLoaded(true);
           setOverlaySettingsError(false);
         }
@@ -820,6 +829,21 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
       setOverlaySettingsSaving(false);
     }
   }, [runOverlayOnStartup, runOverlayWithActiveGame]);
+
+  const handleGameStartToggle = useCallback(async (
+    key: "startReadingSessionWithGame" | "launchAnkiWithGame", enabled: boolean,
+  ) => {
+    const setValue = key === "startReadingSessionWithGame" ? setStartReadingSessionWithGame : setLaunchAnkiWithGame;
+    setValue(enabled);
+    setOverlaySettingsError(false);
+    try {
+      const result = await invokeIpc<{ success: boolean }>("settings.saveSettings", { [key]: enabled });
+      if (!result?.success) throw new Error("Game start settings could not be saved");
+    } catch {
+      setValue(!enabled);
+      setOverlaySettingsError(true);
+    }
+  }, []);
 
   /* ---- Derived status values ------------------------------------- */
   const gsmReady = status?.ready ?? false;
@@ -1363,6 +1387,34 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
                       onChange={(e) => void handleOverlayAutomationChange("runOverlayOnStartup", e.target.checked)}
                     />
                     <span>{t("home.overlay.runOnStartup")}</span>
+                  </label>
+                  <label
+                    className="home-toggle home-overlay-card__startup"
+                    htmlFor="home-session-with-game-toggle"
+                    data-tip={t("home.gameStart.sessionTooltip")}
+                  >
+                    <input
+                      id="home-session-with-game-toggle"
+                      type="checkbox"
+                      checked={startReadingSessionWithGame}
+                      disabled={!overlaySettingsLoaded}
+                      onChange={(e) => void handleGameStartToggle("startReadingSessionWithGame", e.target.checked)}
+                    />
+                    <span>{t("home.gameStart.session")}</span>
+                  </label>
+                  <label
+                    className="home-toggle home-overlay-card__startup"
+                    htmlFor="home-anki-with-game-toggle"
+                    data-tip={t("home.gameStart.ankiTooltip")}
+                  >
+                    <input
+                      id="home-anki-with-game-toggle"
+                      type="checkbox"
+                      checked={launchAnkiWithGame}
+                      disabled={!overlaySettingsLoaded}
+                      onChange={(e) => void handleGameStartToggle("launchAnkiWithGame", e.target.checked)}
+                    />
+                    <span>{t("home.gameStart.anki")}</span>
                   </label>
                   {overlaySettingsError ? <p role="alert">{t("home.overlay.settingsError")}</p> : null}
                 </div>

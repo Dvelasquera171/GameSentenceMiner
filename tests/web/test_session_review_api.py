@@ -222,3 +222,16 @@ def test_remove_manual_session_mark(client):
     assert client.post(f"/api/review/sessions/{row.id}/delete").status_code == 200
     assert ReadingSessionsTable.get(row.id) is None
     assert client.post(f"/api/review/sessions/{row.id}/delete").status_code == 404
+
+
+def test_end_sessions_by_game_name(client):
+    from GameSentenceMiner.util.database.session_review_tables import ReadingSessionsTable
+
+    row = ReadingSessionsTable(game_key="42", game_name="NEKOPARA vol.1", start_ts=1.0)
+    row.save()
+    other = ReadingSessionsTable(game_key="43", game_name="Other", start_ts=1.0)
+    other.save()
+    res = client.post("/api/review/sessions/end", json={"game_name": "NEKOPARA vol.1"})
+    assert res.status_code == 200 and [r["id"] for r in res.json["closed"]] == [row.id]
+    assert ReadingSessionsTable.get(row.id).status == "closed"
+    assert ReadingSessionsTable.get(other.id).status == "open"

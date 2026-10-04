@@ -39,6 +39,9 @@ import {
     getQuitOnWindowClose,
     getRunOverlayOnStartup,
     getRunOverlayWithActiveGame,
+    getStartReadingSessionWithGame,
+    getLaunchAnkiWithGame,
+    getAnkiPath,
     getRunWindowTransparencyToolOnStartup,
     getSceneLaunchProfileForScene,
     getSceneLaunchProfiles,
@@ -78,6 +81,9 @@ import {
     setLaunchTextractorMinimized,
     setRunOverlayOnStartup,
     setRunOverlayWithActiveGame,
+    setStartReadingSessionWithGame,
+    setLaunchAnkiWithGame,
+    setAnkiPath,
     setRunWindowTransparencyToolOnStartup,
     setSceneLaunchProfiles,
     setSetupWizardVersion,
@@ -973,6 +979,9 @@ function getSettingsSnapshot() {
         runWindowTransparencyToolOnStartup: getRunWindowTransparencyToolOnStartup(),
         runOverlayOnStartup: getRunOverlayOnStartup(),
         runOverlayWithActiveGame: getRunOverlayWithActiveGame(),
+        startReadingSessionWithGame: getStartReadingSessionWithGame(),
+        launchAnkiWithGame: getLaunchAnkiWithGame(),
+        ankiPath: getAnkiPath(),
         quitOnWindowClose: getQuitOnWindowClose(),
         textCaptureWizardEnabled: getTextCaptureWizardEnabled(),
         visibleTabs: getVisibleTabs(),
@@ -1193,6 +1202,15 @@ export function registerSettingsIPC(deps?: SettingsIPCDependencies) {
         }
         if (typeof payload.runOverlayWithActiveGame === 'boolean') {
             setRunOverlayWithActiveGame(payload.runOverlayWithActiveGame);
+        }
+        if (typeof payload.startReadingSessionWithGame === 'boolean') {
+            setStartReadingSessionWithGame(payload.startReadingSessionWithGame);
+        }
+        if (typeof payload.launchAnkiWithGame === 'boolean') {
+            setLaunchAnkiWithGame(payload.launchAnkiWithGame);
+        }
+        if (typeof payload.ankiPath === 'string') {
+            setAnkiPath(payload.ankiPath);
         }
         if (typeof payload.quitOnWindowClose === 'boolean') {
             setQuitOnWindowClose(payload.quitOnWindowClose);

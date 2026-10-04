@@ -179,6 +179,11 @@ def register_session_review_routes(app):
         data = request.get_json(silent=True) or {}
         session_id = data.get("session_id")
         game_key = str(data.get("game_key") or "").strip() or None
+        game_name = str(data.get("game_name") or "").strip()
+        if session_id is None and game_key is None and game_name:
+            # Desktop automation knows the game by its OBS scene name only.
+            closed = reading_sessions.end_sessions_for_game(game_name)
+            return jsonify({"closed": [vars(r) for r in closed]}), 200
         if session_id is None and game_key is None:
             game_key, _ = _current_game_key_and_name()
             game_key = game_key or None

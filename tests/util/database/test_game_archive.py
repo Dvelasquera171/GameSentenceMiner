@@ -24,6 +24,10 @@ def archive_db(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "GameSentenceMiner.util.database.archive_files.archive_directory", lambda: tmp_path / "archives"
     )
+    # The maintenance API imports archive_directory by name; patch that copy too (order-dependent otherwise).
+    monkeypatch.setattr(
+        "GameSentenceMiner.web.database_maintenance_api.archive_directory", lambda: tmp_path / "archives"
+    )
     yield db
     db.close()
 

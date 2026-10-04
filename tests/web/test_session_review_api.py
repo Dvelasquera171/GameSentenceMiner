@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import os
 import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from flask import Flask
 
 from GameSentenceMiner.util.config.configuration import Ai, General
 from GameSentenceMiner.util.database.db import SQLiteDB
@@ -36,10 +38,9 @@ def temp_tables():
 
 @pytest.fixture
 def client(temp_tables):
-    app = texthooking_page.app
-    # register_routes() runs at backend startup, not on import; register once for the test app.
-    if "review_page" not in app.view_functions:
-        session_review_api.register_session_review_routes(app)
+    # Own app: the shared texthooker app refuses new routes once another test has used it.
+    app = Flask(__name__, template_folder=str(Path(texthooking_page.__file__).parent / "templates"))
+    session_review_api.register_session_review_routes(app)
     app.config["TESTING"] = True
     return app.test_client()
 

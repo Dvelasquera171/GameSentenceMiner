@@ -45,6 +45,8 @@ let overlayLaunchId: string | null = null;
 let overlayExitPromise: Promise<void> | null = null;
 let overlayStopRequested = false;
 let overlayShutdownTimer: NodeJS.Timeout | null = null;
+let overlayStartedAt = 0;
+const OVERLAY_LOG_MAX_BYTES = 5 * 1024 * 1024;
 const OVERLAY_SHUTDOWN_GRACE_MS = 5000;
 const OVERLAY_SHUTDOWN_TIMEOUT_MS = 15000;
 
@@ -259,6 +261,12 @@ function terminateOverlayProcess(processHandle: ChildProcess): void {
 
 function registerOverlayProcess(processHandle: ChildProcess, source: OverlayLaunchSource, launchId: string): void {
     overlayProcess = processHandle;
+    overlayStartedAt = Date.now();
+    const startedAt = overlayStartedAt;
+    processHandle.once('exit', (code: number | null, signal: string | null) => {
+        const seconds = Math.round((Date.now() - startedAt) / 1000);
+        console.log(`Overlay process exited (code ${code ?? 'none'}${signal ? `, signal ${signal}` : ''}) after ${seconds} s.`);
+    });
     overlayLaunchSource = source;
     overlayLaunchId = launchId;
     overlayStopRequested = false;
@@ -282,8 +290,29 @@ function registerOverlayProcess(processHandle: ChildProcess, source: OverlayLaun
     });
 }
 
-function spawnOverlayFromSource(overlayDir: string, launchId: string) {
+// The dev overlay used to run with its output discarded, so crashes and slow exits left no trace.
+function openOverlayLog(): number | null {
+    try {
+        const logsDir = path.join(BASE_DIR, 'logs');
+        fs.mkdirSync(logsDir, { recursive: true });
+        const logPath = path.join(logsDir, 'overlay.log');
+        try {
+            if (fs.statSync(logPath).size > OVERLAY_LOG_MAX_BYTES) fs.truncateSync(logPath, 0);
+        } catch {
+            // No log yet.
+        }
+        const fd = fs.openSync(logPath, 'a');
+        fs.writeSync(fd, `\n=== Overlay launch ${new Date().toISOString()} ===\n`);
+        return fd;
+    } catch (error) {
+        console.warn('Could not open overlay.log; overlay output is discarded.', error);
+        return null;
+    }
+}
+
+function spawnOverlayFromSource(overlayDir: string, launchId: string, outputFd: number | null = null) {
     const env = { ...process.env, GSM_OVERLAY_LAUNCH_ID: launchId };
+    const stdio = outputFd === null ? ('ignore' as const) : (['ignore', outputFd, outputFd] as ['ignore', number, number]);
     if (process.platform === 'win32') {
         return {
             command: 'cmd.exe',
@@ -291,7 +320,7 @@ function spawnOverlayFromSource(overlayDir: string, launchId: string) {
             options: {
                 cwd: overlayDir,
                 detached: false,
-                stdio: 'ignore' as const,
+                stdio,
                 env,
             },
         };
@@ -303,7 +332,7 @@ function spawnOverlayFromSource(overlayDir: string, launchId: string) {
         options: {
             cwd: overlayDir,
             detached: false,
-            stdio: 'ignore' as const,
+            stdio,
             env,
         },
     };
@@ -349,7 +378,8 @@ export async function runOverlayWithSource(
     }
 
     if (overlayProcess && overlayProcess.exitCode === null) {
-        console.log('Overlay is already running.');
+        const seconds = Math.round((Date.now() - overlayStartedAt) / 1000);
+        console.log(`Overlay is already running (PID ${overlayProcess.pid}, started ${seconds} s ago); not launching another.`);
         return true;
     }
 
@@ -367,7 +397,8 @@ export async function runOverlayWithSource(
             return false;
         }
 
-        const sourceLaunch = spawnOverlayFromSource(overlayDir, launchId);
+        const outputFd = openOverlayLog();
+        const sourceLaunch = spawnOverlayFromSource(overlayDir, launchId, outputFd);
         let processHandle: ChildProcess;
         try {
             processHandle = spawn(
@@ -380,6 +411,9 @@ export async function runOverlayWithSource(
             overlayProcess = null;
             overlayLaunchSource = null;
             return false;
+        } finally {
+            // The child has its own handle to the log file.
+            if (outputFd !== null) fs.closeSync(outputFd);
         }
 
         registerOverlayProcess(processHandle, source, launchId);

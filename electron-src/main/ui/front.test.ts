@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const existsSyncMock = vi.fn();
+const openSyncMock = vi.fn();
+const closeSyncMock = vi.fn();
+const writeSyncMock = vi.fn();
+const statSyncMock = vi.fn();
 const spawnMock = vi.fn();
 const execFileMock = vi.fn();
 const sendStopOverlayMock = vi.fn();
@@ -20,6 +24,12 @@ vi.mock('electron', () => ({
 
 vi.mock('fs', () => ({
     existsSync: existsSyncMock,
+    mkdirSync: vi.fn(),
+    statSync: statSyncMock,
+    truncateSync: vi.fn(),
+    openSync: openSyncMock,
+    writeSync: writeSyncMock,
+    closeSync: closeSyncMock,
 }));
 
 vi.mock('child_process', () => ({
@@ -112,6 +122,12 @@ describe('runOverlayWithSource', () => {
         isDevValue = false;
         useInProcessOverlayValue = false;
         existsSyncMock.mockReset();
+        openSyncMock.mockReset().mockReturnValue(7);
+        closeSyncMock.mockReset();
+        writeSyncMock.mockReset();
+        statSyncMock.mockReset().mockImplementation(() => {
+            throw new Error('ENOENT');
+        });
         spawnMock.mockReset();
         execFileMock.mockReset();
         sendStopOverlayMock.mockReset().mockReturnValue(false);
@@ -144,9 +160,12 @@ describe('runOverlayWithSource', () => {
         expect(spawnMock).toHaveBeenCalledWith('cmd.exe', ['/d', '/s', '/c', 'npm run start'], {
             cwd: 'C:\\repo\\GSM_Overlay',
             detached: false,
-            stdio: 'ignore',
+            stdio: ['ignore', 7, 7],
             env: expect.objectContaining({ GSM_OVERLAY_LAUNCH_ID: expect.any(String) }),
         });
+        // Overlay output goes to logs/overlay.log; the parent closes its copy of the handle.
+        expect(openSyncMock).toHaveBeenCalledWith(expect.stringMatching(/test-gsm.logs.overlay\.log$/), 'a');
+        expect(closeSyncMock).toHaveBeenCalledWith(7);
         expect(getOverlayRuntimeState()).toEqual({
             isRunning: true,
             source: 'startup',
@@ -351,5 +370,31 @@ describe('runOverlayWithSource', () => {
         const waiting = expect(waitForOverlayShutdown()).rejects.toThrow('Timed out waiting for overlay shutdown.');
         await vi.advanceTimersByTimeAsync(15_000);
         await waiting;
+    });
+});
+
+describe('overlay log', () => {
+    beforeEach(() => {
+        isDevValue = true;
+        useInProcessOverlayValue = false;
+        existsSyncMock.mockReset().mockReturnValue(true);
+        spawnMock.mockReset();
+        closeSyncMock.mockReset();
+        statSyncMock.mockReset().mockImplementation(() => {
+            throw new Error('ENOENT');
+        });
+    });
+
+    it('still launches with output discarded when the log cannot be opened', async () => {
+        openSyncMock.mockReset().mockImplementation(() => {
+            throw new Error('EACCES');
+        });
+        spawnMock.mockReturnValue(createProcessHandle());
+        const { runOverlayWithSource } = await loadFrontModule();
+
+        await expect(runOverlayWithSource('manual')).resolves.toBe(true);
+
+        expect(spawnMock.mock.calls[0][2].stdio).toBe('ignore');
+        expect(closeSyncMock).not.toHaveBeenCalled();
     });
 });

@@ -19,7 +19,7 @@ AI test, see E). Every Python change was followed by `ruff format` and
 | Q. AI help follow-ups + context size | done, owner test pending | `cbd77e1d` |
 | Session Review A (review page) | done, owner test pending | `3ea8bdf0` |
 | Session Review B (session buttons + auto-end) | B.1, B.2 done; B.3 skipped (optional) | `ff089203` |
-| Session Review C (AI output quality) | C.3 done; C.1, C.2 wait for your first real run; C.4 needs approval | `74bad3d5` |
+| Session Review C (AI output quality) | C.3 done; C.1, C.2 wait for your first real run; C.4 dropped (your decision) | `74bad3d5` |
 | D, F | not started (by instruction) | |
 
 **Suites at the end:** required Python suite `1420 passed, 1 skipped`; overlay `node --test`
@@ -32,15 +32,11 @@ dictionary import can take a while).
 
 ## Needs owner approval
 
-1. **C.4 speaker names (new DB column).** The review prompts already print `speaker:` when a line
-   has one, but nothing stores it. Proposed change: add a nullable `speaker TEXT` column to
-   `game_lines` (migration in `util/database/db.py`, `GameLinesTable._fields`/`_types`), read an
-   optional `name`/`speaker` key from JSON websocket messages in `gametext.py`
-   (`listen_on_websocket`, next to `sentence`/`time`/`source`), and pass it through
-   `ReviewLine.from_game_line` (already reads `.speaker`). Also needs research first: your Luna
-   config only shows `network_websocket = 1` on port 2333, nothing about names, so it is not
-   known whether Luna's `/api/ws/text/origin` can send the speaker at all. Not done because it is a
-   table change.
+Nothing pending.
+
+Decided 2026-10-04: **C.4 speaker names dropped.** No `speaker` column; the AI infers who is
+talking from the session's context. (The prompts still print `speaker:` if a source ever
+provides one; nothing to change.)
 
 ## Skipped and why
 
@@ -247,7 +243,7 @@ GSM restarted cleanly; the setup page shows "No Firefox settings export in …\y
   must quote a real line (a wrong `line_id` is repaired when the quote is found in another line;
   an invented quote is dropped); quiz questions citing only nonexistent lines are dropped (never
   all of them). What it changed is written to the GSM log ("Session review consistency pass").
-- C.1/C.2/C.4: see "Skipped" and "Needs owner approval" above.
+- C.1/C.2: see "Skipped" above. C.4 (speaker names): dropped by decision; the AI infers speakers from context.
 
 ### Owner test (click by click)
 1. Firefox → `http://localhost:55000` (texthooker). Top right: **▶ Session** → it turns into

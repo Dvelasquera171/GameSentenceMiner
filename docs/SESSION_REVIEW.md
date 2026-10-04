@@ -1,7 +1,7 @@
 # Session Review: comprehension summary + quiz
 
 Status (2026-10-04): **A done, B.1/B.2 done, C.3 done**; B.3 optional, C.1/C.2 wait for the
-owner's first real run, C.4 needs a `game_lines` column (owner approval). Details and test steps:
+owner's first real run, C.4 dropped (owner: the AI infers speakers from context). Details and test steps:
 [PROGRESS.md](PROGRESS.md). Original status: foundation laid, UI and integrations open. This document is the roadmap for
 whoever picks this up next (a local coding agent included). Read it together with
 `docs/AI_AGENT_MAP.md`.

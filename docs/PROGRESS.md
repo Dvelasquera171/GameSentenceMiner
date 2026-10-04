@@ -17,11 +17,39 @@ AI test, see E). Every Python change was followed by `ruff format` and
 | E. Setup health page | done, owner test pending | `84eef80f` |
 | Y. Overlay Yomitan sync from Firefox export | done, owner test pending | `a6abc1e6` |
 | Q. AI help follow-ups + context size | done, owner test pending | `cbd77e1d` |
-| Session Review A / B / C | in progress | |
+| Session Review A (review page) | done, owner test pending | `3ea8bdf0` |
+| Session Review B (session buttons + auto-end) | B.1, B.2 done; B.3 skipped (optional) | `ff089203` |
+| Session Review C (AI output quality) | C.3 done; C.1, C.2 wait for your first real run; C.4 needs approval | `74bad3d5` |
+| D, F | not started (by instruction) | |
+
+**Suites at the end:** required Python suite `1420 passed, 1 skipped`; overlay `node --test`
+383 passed; texthooker `pnpm test` 13 + 36 passed, `svelte-check` 0 errors. GSM was restarted
+with `npm run agent:restart` after every item (exit 0 each time) and is left running.
+
+**Suggested order for your tests:** E (2 min) → Q (5 min) → Session Review B then A (one short
+session; generating a review costs NanoGPT tokens) → Y (needs the two Firefox exports; the
+dictionary import can take a while).
 
 ## Needs owner approval
 
-Nothing yet.
+1. **C.4 speaker names (new DB column).** The review prompts already print `speaker:` when a line
+   has one, but nothing stores it. Proposed change: add a nullable `speaker TEXT` column to
+   `game_lines` (migration in `util/database/db.py`, `GameLinesTable._fields`/`_types`), read an
+   optional `name`/`speaker` key from JSON websocket messages in `gametext.py`
+   (`listen_on_websocket`, next to `sentence`/`time`/`source`), and pass it through
+   `ReviewLine.from_game_line` (already reads `.speaker`). Also needs research first: your Luna
+   config only shows `network_websocket = 1` on port 2333, nothing about names, so it is not
+   known whether Luna's `/api/ws/text/origin` can send the speaker at all. Not done because it is a
+   table change.
+
+## Skipped and why
+
+- **Session Review C.1 / C.2** (tighten prompts, tune `DEFAULT_CHUNK_CHARS`,
+  `QUIZ_CHARS_PER_QUESTION`, `MAX_HIGHLIGHTS`): they depend on reading real reviews, and running
+  one would spend NanoGPT tokens. Waiting for your feedback from the first run (see the questions
+  at the end of the Session Review test steps).
+- **Session Review B.3** ("merge with previous" / "split here"): marked optional in
+  SESSION_REVIEW.md; left out to keep the change small.
 
 ## Open questions
 
@@ -34,6 +62,9 @@ Nothing yet.
 2. **Y, which overlay profile.** The export's current profile is synced into the overlay's
    *current* profile only (yours is probably `GSM - Lapis` from GSM's Anki setup). Other overlay
    profiles are untouched.
+3. **Session auto-end when the game closes** uses the overlay's window monitor, so it only works
+   while the overlay is running. Without the overlay, a session still ends on an OBS scene change
+   or with the End button. Is that enough, or should GSM watch the game process itself?
 
 ---
 
@@ -181,3 +212,57 @@ GSM restarted cleanly; the setup page shows "No Firefox settings export in …\y
 5. Set **Dialogue context** to **Whole session**, ask who a pronoun (彼/あいつ) refers to → the
    answer uses lines from earlier in the session.
 6. **New thread** clears the conversation. The stethoscope icon in the header opens Setup Check.
+
+## Session Review A / B / C
+
+### A. Review page — done (`3ea8bdf0`)
+`http://localhost:55000/review` (new **Review** link in the navigation bar).
+- Layout on the existing dashboard CSS. Japanese is visible and plain selectable text (Firefox
+  Yomitan works on it); English is always in a collapsed "English" section, including grade
+  feedback, correction notes and reference answers.
+- While generating: spinner with stage and `n/m` (digest 2/5, quiz 8/12), polling every 3 s.
+  Failed reviews show the provider error and a **Retry** button (same time range, new review).
+- Quiz: Ctrl+Enter or 採点 grades (one AI call per answer, spinner per question). After a grade:
+  verdict + score, Japanese feedback, ✎ corrections, 模範解答 and 参考解答 (the reference answer
+  stored with the question). 過去の解答 (n) lists every earlier attempt; the header shows
+  "回答済み n/m · 平均 x点" (best score per question). The last grade is shown again on reload.
+- Highlight cards: **Copy line** and **Find in Search** (`/search?q=<quote>`).
+- Links like `/review?game_key=…&review=12` reopen a review.
+- Verified with a throwaway preview server (temporary database, fake grader, port 5099, your data
+  untouched): done/running/failed states, grading, history and score all behaved as described.
+
+### B. Session boundaries — B.1, B.2 done (`ff089203`)
+- **Texthooker header:** a **▶ Session** button. Click = start a manual session for GSM's current
+  game; it then reads "■ <game> · n min". Click again = end every open session; a **Review →**
+  link appears that opens the review page for that game. Errors (e.g. no current game) show next to it.
+- **Auto-end:** an OBS scene change closes open manual sessions of other games. With the overlay
+  running, a game window that has been gone for 60 s closes that game's sessions (a restart or
+  loading screen shorter than that keeps the session).
+- Texthooker rebuilt; files: `texthooker/src/components/SessionControls.svelte`, `App.svelte`,
+  `util/reading_sessions.py` (`end_sessions_on_game_change`, `end_sessions_for_game`),
+  `obs/service.py`, `util/platform/windows_window_monitor.py`.
+
+### C. Output quality — C.3 done (`74bad3d5`)
+- After generation, a consistency pass checks the AI output against the session: a highlight
+  must quote a real line (a wrong `line_id` is repaired when the quote is found in another line;
+  an invented quote is dropped); quiz questions citing only nonexistent lines are dropped (never
+  all of them). What it changed is written to the GSM log ("Session review consistency pass").
+- C.1/C.2/C.4: see "Skipped" and "Needs owner approval" above.
+
+### Owner test (click by click)
+1. Firefox → `http://localhost:55000` (texthooker). Top right: **▶ Session** → it turns into
+   "■ <game> · 0 min". Read a few lines. Click it → it ends and **Review →** appears; click that.
+2. On the review page the game is preselected; the sessions table shows your session as
+   **manual**. Press **Generate review** on a short session (a few hundred lines; this spends NanoGPT
+   tokens: about one call per 6,000 characters, plus one merge, plus one per 8 questions).
+3. The review opens with "Generating: digest 1/N" and updates by itself. When done: read あらすじ,
+   open English, check that 読み間違えやすい表現 quote real lines (**Find in Search** finds them).
+4. Answer a quiz question in Japanese, Ctrl+Enter → 採点中… → verdict, score, corrections; open
+   参考解答. Answer it again → 過去の解答 (1). Reload the page → the last grade is still there.
+5. Failure path: GSM Settings → AI, break the key → Generate → the review fails with the provider
+   message and a **Retry** button. Restore the key → **Retry** → it runs.
+6. Auto-end: start a session, switch OBS to another game's scene → within 30 s the texthooker
+   button is back to **▶ Session**. With the overlay running: start a session, close the game,
+   wait over a minute → same.
+7. Please write down: which highlights were genuinely useful, which were noise, and whether the
+   number of questions felt right for the session length. That drives C.1/C.2.

@@ -266,3 +266,47 @@ GSM restarted cleanly; the setup page shows "No Firefox settings export in …\y
    wait over a minute → same.
 7. Please write down: which highlights were genuinely useful, which were noise, and whether the
    number of questions felt right for the session length. That drives C.1/C.2.
+
+---
+
+## 2026-10-04 (owner present): friction first
+
+Owner's test showed setup friction as the main problem: ten minutes of setup, a confusing
+hook/OCR wizard, an overlay that never started, and lookups only in Firefox (alt-tab).
+Decisions: one-click hub is the goal; hooked VNs get OCR on demand (hotkey), never
+continuous OCR by default; hotkeys should avoid Ctrl/Shift/Alt (numpad proposed).
+
+| What | Commit |
+|---|---|
+| Overlay never started: `GSM_Overlay/node_modules` was missing (installed); lockfile synced | `d30bca23` |
+| Overlay output now in `logs/overlay.log`; exits and refused relaunches logged | `706c9fa4` |
+| Dictionary import that died with the overlay is detected and retried | `2f91a02f` |
+| Ask AI panel: overlay hotkey **Num0**, newest line, follow-ups; numpad hotkeys work in the overlay | `0218e863` |
+| Looping title-screen text dropped (3rd copy within 60 s); setup page "Text source" row knows the built-in hook and warns about continuous OCR next to a hook | `c2fc52d5` |
+| Review page: Lines / Delete lines / Remove mark per session | `331fc7b8` |
+| Wizard: never switches to OCR by accident; hooked games get OCR on demand | `8ea7fb56` |
+| Reading session and Anki start/stop with the active game (Home tab switches) | `b04d3b01` |
+
+Data: all lines deleted on request (210 lines, 3 games); backup first at
+`%APPDATA%\GameSentenceMiner\backup\gsm_backup_20261004_151249.db`.
+Overlay Yomitan: synced from the Firefox export (5 dictionaries, all 3 card formats identical).
+
+### Owner test (VN, about 10 minutes)
+1. Start GSM only. Home tab: "Open and close with active game", "Start and end a reading session
+   with the game" and "Start Anki with the game" should be on.
+2. Run the Text Capture Wizard for Nekopara again (Game Automation → the scene → wizard). Hook step:
+   click the line that matches the dialogue → "Next: OCR for pictures and extra boxes". OCR step:
+   "OCR on demand (recommended)" is preselected. Save. (Nekopara's old profile says Auto OCR, no hook.)
+3. Start the game. Within a few seconds: Anki opens, the overlay appears, the hook delivers text.
+4. Hover a word with Shift in the game: Yomitan pops up. Press **Num0**: the Ask AI panel shows the
+   current line; ask a question, then a follow-up. Esc closes it.
+5. Read a while, close the game. `localhost:55000/review`: one **manual** session covering exactly
+   that time. Lines shows them; Generate review works on it.
+6. `localhost:55000/setup-check`: "Text source" says the built-in hook, OCR on demand.
+
+### Still open (next)
+- Wizard first question "What kind of game is it?" (VN → hook + OCR on demand; can't-hook → OCR).
+- Numpad layout for all hotkeys (proposal in chat: Num0 AI, Num1 OCR area, Num2 OCR box, …);
+  the GSM OCR hotkeys are still Ctrl+Shift+M/O/W. Needs the owner's OK on the layout.
+- Plain explanations in the GSM app (app vs web pages, sessions) and overlay settings window not
+  opening on every start.

@@ -51,3 +51,6 @@ def register_routes() -> None:
     from GameSentenceMiner.web.yomitan_sync_api import register_yomitan_sync_routes
 
     register_yomitan_sync_routes(app)
+    from GameSentenceMiner.web.ask_api import register_ask_routes
+
+    register_ask_routes(app)

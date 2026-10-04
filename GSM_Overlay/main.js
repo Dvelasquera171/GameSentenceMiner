@@ -16,6 +16,7 @@ const bg = require('./background');
 const BackendConnector = require('./backend_connector');
 const { configureYomitan, createSetupHandler } = require('./anki_setup');
 const yomitanSync = require('./yomitan_sync');
+const aiHelp = require('./ai_help_window');
 const { createMagpieState } = require('./magpie');
 const { JitenParseCache, DEFAULT_JITEN_PARSE_URL: JITEN_DEFAULT_PARSE_URL } = require('./jiten_cache');
 const { installJitenSessionBroker, JitenFrameRequests } = require('./jiten_session');
@@ -1122,6 +1123,7 @@ const DEFAULT_USER_SETTINGS = Object.freeze({
   "dismissedFullscreenRecommendations": [], // Games for which Push to Show recommendation was dismissed
   "dismissedExclusiveFullscreenRecommendations": [], // Games for which display-mode recommendation was dismissed
   "texthookerHotkey": DEFAULT_TEXTHOOKER_HOTKEY,
+  "aiHelpHotkey": aiHelp.DEFAULT_AI_HELP_HOTKEY,
   "texthookerUrl": DEFAULT_TEXTHOOKER_URL,
   "enableJitenReader": true,
   // Jiten Reader style SRS highlighting on the overlay text
@@ -1200,6 +1202,7 @@ const CONFIGURED_HOTKEY_SETTING_KEYS = Object.freeze([
   "translateHotkey",
   "liveStatsToggleHotkey",
   "texthookerHotkey",
+  "aiHelpHotkey",
   "gamepadKeyboardHotkey",
 ]);
 const CONFIGURED_HOTKEY_SETTING_KEY_SET = new Set(CONFIGURED_HOTKEY_SETTING_KEYS);
@@ -2545,6 +2548,15 @@ const handleYomitanSync = yomitanSync.createSyncHandler({
   readStatus: () => yomitanSync.readStatus(BrowserWindow, yomitanExt),
   send: (response) => { if (backend?.connected) backend.send(response); },
   state: yomitanSync.createFileState(fs, path.join(dataPath, 'yomitan_sync_state.json')),
+});
+
+// One hotkey: "Ask AI about this line" over the game (GSM's /ask page).
+const aiHelpWindow = aiHelp.createAiHelpWindowController({
+  BrowserWindow,
+  getUrl: () => aiHelp.askUrlFromTexthookerUrl(userSettings.texthookerUrl || DEFAULT_TEXTHOOKER_URL),
+  getDisplayBounds: () => getOverlayBoundsForDisplay(getCurrentOverlayMonitor({ logFallback: false })),
+  focusWindow: (win) => forceForegroundWindow(win),
+  onHidden: () => requestBackendFocusRestore("ai-help-closed", { force: true }),
 });
 
 function handleOverlayWebSocketControlMessage(type, data) {
@@ -7363,6 +7375,12 @@ async function startOverlayAppImpl() {
     }, { settingKey: "liveStatsToggleHotkey", debounceMs: TOGGLE_HOTKEY_COOLDOWN_MS });
   }
   registerLiveStatsToggleHotkey();
+
+  function registerAiHelpHotkey(_oldHotkey) {
+    setAppHotkey("aiHelp", userSettings.aiHelpHotkey || aiHelp.DEFAULT_AI_HELP_HOTKEY, () => aiHelpWindow.toggle(),
+      { settingKey: "aiHelpHotkey", debounceMs: TOGGLE_HOTKEY_COOLDOWN_MS });
+  }
+  registerAiHelpHotkey();
   
   function registerGamepadKeyboardHotkey(oldHotkey) {
     const keysToUnregister = new Set([
@@ -7459,6 +7477,7 @@ async function startOverlayAppImpl() {
     if (changed("overlaySettingsHotkey")) registerOverlaySettingsHotkey(previous.overlaySettingsHotkey);
     if (changed("translateHotkey")) registerTranslateHotkey(previous.translateHotkey);
     if (changed("texthookerHotkey")) registerTexthookerHotkey(previous.texthookerHotkey);
+    if (changed("aiHelpHotkey")) registerAiHelpHotkey(previous.aiHelpHotkey);
     if (changed("liveStatsToggleHotkey")) registerLiveStatsToggleHotkey(previous.liveStatsToggleHotkey);
     if (changed("gamepadKeyboardHotkey") || changed("gamepadKeyboardEnabled") || changed("gamepadEnabled")) {
       registerGamepadKeyboardHotkey(previous.gamepadKeyboardHotkey);
@@ -7476,6 +7495,7 @@ async function startOverlayAppImpl() {
       registerToggleFuriganaHotkey();
       registerLiveStatsToggleHotkey();
       registerTexthookerHotkey();
+      registerAiHelpHotkey();
       registerGamepadKeyboardHotkey();
       registerManualShowHotkey();
       syncAppHotkeyInputServerConnection(`${reason}:route-all-hotkeys`);
@@ -8388,6 +8408,9 @@ async function startOverlayAppImpl() {
       case "translateHotkey":
         registerTranslateHotkey(oldValue);
         break;
+      case "aiHelpHotkey":
+        registerAiHelpHotkey(oldValue);
+        break;
       case "liveStatsToggleHotkey":
         registerLiveStatsToggleHotkey(oldValue);
         break;
@@ -8415,6 +8438,7 @@ async function startOverlayAppImpl() {
         registerToggleFuriganaHotkey();
         registerLiveStatsToggleHotkey();
         registerTexthookerHotkey();
+        registerAiHelpHotkey();
         registerGamepadKeyboardHotkey();
         registerManualShowHotkey();
         syncAppHotkeyInputServerConnection("setting-changed:routeAllHotkeysThroughInputServer");

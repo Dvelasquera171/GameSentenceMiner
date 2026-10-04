@@ -94,9 +94,19 @@
       F21: "F21", F22: "F22", F23: "F23", F24: "F24",
     };
 
+    // Numpad keys report the same event.key as the top row; Electron needs num0..num9 etc.
+    const numpadMap = {
+      Numpad0: "num0", Numpad1: "num1", Numpad2: "num2", Numpad3: "num3", Numpad4: "num4",
+      Numpad5: "num5", Numpad6: "num6", Numpad7: "num7", Numpad8: "num8", Numpad9: "num9",
+      NumpadAdd: "numadd", NumpadSubtract: "numsub", NumpadMultiply: "nummult",
+      NumpadDivide: "numdiv", NumpadDecimal: "numdec",
+    };
+
     // Get the main key
     let mainKey = "";
-    if (keyMap[event.key]) {
+    if (numpadMap[event.code]) {
+      mainKey = numpadMap[event.code];
+    } else if (keyMap[event.key]) {
       mainKey = keyMap[event.key];
     } else if (event.key.length === 1) {
       mainKey = event.key.toUpperCase();
@@ -153,6 +163,8 @@
       "Space", "Return", "Escape", "Backspace", "Delete", "Tab",
       "Up", "Down", "Left", "Right", "Home", "End", "PageUp", "PageDown", "Insert",
       "Mouse4", "Mouse5",
+      "num0", "num1", "num2", "num3", "num4", "num5", "num6", "num7", "num8", "num9",
+      "numadd", "numsub", "nummult", "numdiv", "numdec",
       "+", "-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "`",
       "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_",
     ];

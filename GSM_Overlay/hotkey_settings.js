@@ -4,6 +4,13 @@ const SUPPORTED_KEY_TOKENS = new Set([
   ...Array.from({ length: 24 }, (_value, index) => `f${index + 1}`),
   "mouse4",
   "mouse5",
+  // Numpad keys (Electron accelerator names); VNs rarely bind them, unlike Ctrl/Shift/Alt.
+  ...Array.from({ length: 10 }, (_value, index) => `num${index}`),
+  "numadd",
+  "numsub",
+  "nummult",
+  "numdiv",
+  "numdec",
   "space",
   "return",
   "escape",

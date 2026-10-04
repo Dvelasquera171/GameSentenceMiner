@@ -2135,6 +2135,17 @@
       </label>
       <label>
         <span class="label-text">
+          Ask AI Hotkey
+          <div class="hotkey-info">Opens "Ask AI about this line" over the game with the newest line loaded: quick explanations, your own question, follow-ups. Default Num0 (numpad, NumLock on), because Ctrl, Shift and Alt often do something in visual novels.</div>
+          <div class="hotkey-info" style="color: #4CAF50; font-size: 10px;">Click input and press your desired key (numpad keys work)</div>
+          <div id="aihelp-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
+        </span>
+        <div class="input-container">
+          <input type="text" id="aiHelpHotkey" value="num0" title="Enter a hotkey, e.g. num0 (numpad 0)" />
+        </div>
+      </label>
+      <label>
+        <span class="label-text">
           TextFeed URL
           <div class="hotkey-info">Automatically synced from GSM's single-port texthooker setting.</div>
         </span>
@@ -3243,6 +3254,7 @@
       yomitanSettingsHotkey: { warningElementId: "yomitansettings-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
       overlaySettingsHotkey: { warningElementId: "overlaysettings-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
       texthookerHotkey: { warningElementId: "texthooker-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
+      aiHelpHotkey: { warningElementId: "aihelp-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
       gamepadKeyboardHotkey: { warningElementId: "gamepadkeyboard-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
     });
     const VALID_PLATFORM_OVERRIDE_VALUES = new Set(["win32", "linux", "darwin"]);
@@ -4155,6 +4167,7 @@
       createHotkeyBinding("yomitanSettingsHotkey", "#yomitanSettingsHotkey"),
       createHotkeyBinding("overlaySettingsHotkey", "#overlaySettingsHotkey"),
       createHotkeyBinding("texthookerHotkey", "#texthookerHotkey"),
+      createHotkeyBinding("aiHelpHotkey", "#aiHelpHotkey"),
       createCheckboxBinding("gamepadEnabled", "#gamepadEnabled", {
         afterApply: () => syncGamepadSettingsEnabledUi(),
       }),

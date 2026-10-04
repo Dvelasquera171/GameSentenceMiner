@@ -561,6 +561,13 @@ class OBSService:
         gsm_state.current_game = scene_name
 
         try:
+            from GameSentenceMiner.util.reading_sessions import end_sessions_on_game_change
+
+            end_sessions_on_game_change(scene_name)
+        except Exception as e:
+            logger.debug(f"Reading session auto-end on scene change failed: {e}")
+
+        try:
             self._refresh_scene_items(scene_name)
         except Exception as e:
             logger.debug(f"Scene change refresh failed: {e}")

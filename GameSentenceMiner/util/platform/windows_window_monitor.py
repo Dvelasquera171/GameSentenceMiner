@@ -145,6 +145,8 @@ from GameSentenceMiner.web.gsm_websocket import websocket_manager, ID_OVERLAY
 # verify that the OBS target owns the foreground before attributing the state.
 QUNS_RUNNING_D3D_FULL_SCREEN = 3
 QUNS_ACCEPTS_NOTIFICATIONS = 5
+# A game window gone this long (not a restart or loading screen) ends its manual reading session.
+TARGET_LOST_SESSION_END_SECONDS = 60.0
 
 if is_windows():
     shell32 = ctypes.windll.shell32
@@ -189,6 +191,8 @@ class WindowsWindowStateMonitor(BaseWindowStateMonitor):
         # Gates the lenient no-output wait: only honor it before we've ever seen the
         # window; once we've had it and lost it, the game is gone — hide immediately.
         self.ever_had_target_hwnd: bool = False
+        self._target_lost_since: Optional[float] = None
+        self._session_ended_for_lost_target: bool = False
         # Last hwnd we positively identified as the game, kept even after target_hwnd is
         # cleared (e.g. an exclusive-fullscreen game going non-visible while minimized) so
         # focus restore can still re-activate it. See activate_target_window.
@@ -739,6 +743,19 @@ class WindowsWindowStateMonitor(BaseWindowStateMonitor):
         except Exception:
             return False
 
+    def _end_reading_session_after_target_lost(self, now: float) -> None:
+        if self._target_lost_since is None:
+            self._target_lost_since = now
+        if self._session_ended_for_lost_target or now - self._target_lost_since < TARGET_LOST_SESSION_END_SECONDS:
+            return
+        self._session_ended_for_lost_target = True
+        try:
+            from GameSentenceMiner.util.reading_sessions import end_sessions_for_game
+
+            end_sessions_for_game(getattr(self, "last_scene_name", "") or "")
+        except Exception as e:
+            logger.debug(f"Reading session auto-end after game closed failed: {e}")
+
     def _reset_capture_target(self) -> None:
         self.target_hwnd = None
         self.last_known_target_hwnd = None
@@ -746,6 +763,8 @@ class WindowsWindowStateMonitor(BaseWindowStateMonitor):
         self._browser_target_pid = 0
         self.retry_find_count = 0
         self.ever_had_target_hwnd = False
+        self._target_lost_since = None
+        self._session_ended_for_lost_target = False
         self._capture_target_changed_at = time.time()
         self.last_state = "unknown"
         self.last_window_rect = None
@@ -1562,12 +1581,15 @@ class WindowsWindowStateMonitor(BaseWindowStateMonitor):
             if self.ever_had_target_hwnd:
                 # We had the window and lost it — the game is gone, hide now.
                 await self._hide_overlay_after_target_lost()
+                self._end_reading_session_after_target_lost(now)
             else:
                 # Never saw the window yet; tolerate transient absence while OBS captures.
                 await self._hide_overlay_if_obs_has_no_output()
             return
 
         self.ever_had_target_hwnd = True
+        self._target_lost_since = None
+        self._session_ended_for_lost_target = False
         self.last_known_target_hwnd = self.target_hwnd
         self.hidden_due_to_no_output = False
 

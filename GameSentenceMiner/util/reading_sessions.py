@@ -143,6 +143,36 @@ def start_manual_session(game_key: str, game_name: str = "") -> ReadingSessionsT
     return session
 
 
+def _belongs_to(row: ReadingSessionsTable, game_name: str) -> bool:
+    return game_name in (row.game_name, row.game_key)
+
+
+def end_sessions_on_game_change(new_game_name: str) -> List[ReadingSessionsTable]:
+    """OBS scene changed: close open manual sessions that belong to another game."""
+    new_game_name = (new_game_name or "").strip()
+    if not new_game_name:
+        return []
+    closed = [row for row in ReadingSessionsTable.get_open() if not _belongs_to(row, new_game_name)]
+    for row in closed:
+        row.close()
+    if closed:
+        logger.info(f"Ended {len(closed)} reading session(s) after switching to {new_game_name}")
+    return closed
+
+
+def end_sessions_for_game(game_name: str) -> List[ReadingSessionsTable]:
+    """The game's window is gone: close its open manual sessions."""
+    game_name = (game_name or "").strip()
+    if not game_name:
+        return []
+    closed = [row for row in ReadingSessionsTable.get_open() if _belongs_to(row, game_name)]
+    for row in closed:
+        row.close()
+    if closed:
+        logger.info(f"Ended {len(closed)} reading session(s): {game_name} closed")
+    return closed
+
+
 def end_manual_session(session_id: Optional[int] = None, game_key: Optional[str] = None) -> List[ReadingSessionsTable]:
     """End button, or an automatic hook (game closed / OBS scene changed) calling with game_key."""
     if session_id is not None:

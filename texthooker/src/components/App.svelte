@@ -107,6 +107,7 @@
 	import Notes from './Notes.svelte';
 	import Presets from './Presets.svelte';
 	import Settings from './Settings.svelte';
+	import SessionControls from './SessionControls.svelte';
 	import SocketConnector from './SocketConnector.svelte';
 	import Spinner from './Spinner.svelte';
 	import Stats from './Stats.svelte';
@@ -1350,6 +1351,7 @@
 
 <header class="fixed top-0 right-0 flex justify-end items-center p-2 bg-base-100" bind:this={settingsContainer}>
 	<Stats on:afkBlur={onAfkBlur} />
+	<SessionControls />
 	{#if $websocketUrl$}
 		<SocketConnector />
 	{/if}

@@ -49,3 +49,85 @@ def test_duration_and_dict_shape():
     d = s.to_dict()
     assert d["duration_seconds"] == 60 and "line_ids" not in d
     assert "line_ids" in s.to_dict(include_line_ids=True)
+
+
+import pytest  # noqa: E402
+
+from GameSentenceMiner.util.database.db import SQLiteDB  # noqa: E402
+
+
+@pytest.fixture
+def session_db(tmp_path):
+    db = SQLiteDB(str(tmp_path / "sessions.db"))
+    original = ReadingSessionsTable._db
+    ReadingSessionsTable.set_db(db)
+    yield db
+    ReadingSessionsTable._db = original
+    db.close()
+
+
+def _open(game_key, game_name):
+    return rs.start_manual_session(game_key, game_name)
+
+
+def test_scene_change_ends_sessions_of_other_games(session_db):
+    keep = _open("g1", "Game One")
+    other = _open("g2", "Game Two")
+    closed = rs.end_sessions_on_game_change("Game One")
+    assert [row.id for row in closed] == [other.id]
+    assert ReadingSessionsTable.get(other.id).status == "closed"
+    assert ReadingSessionsTable.get(keep.id).status == "open"
+    # Repeating the event is harmless.
+    assert rs.end_sessions_on_game_change("Game One") == []
+
+
+def test_scene_change_to_empty_name_keeps_sessions(session_db):
+    keep = _open("g1", "Game One")
+    assert rs.end_sessions_on_game_change("") == []
+    assert ReadingSessionsTable.get(keep.id).status == "open"
+
+
+def test_game_closed_ends_only_that_games_sessions(session_db):
+    gone = _open("g1", "Game One")
+    keep = _open("Manga Vol 1", "Manga Vol 1")
+    closed = rs.end_sessions_for_game("Game One")
+    assert [row.id for row in closed] == [gone.id]
+    assert ReadingSessionsTable.get(keep.id).status == "open"
+    # Sessions keyed by name (no games-table id) match too.
+    assert [row.id for row in rs.end_sessions_for_game("Manga Vol 1")] == [keep.id]
+    assert rs.end_sessions_for_game("") == []
+
+
+def test_window_monitor_ends_session_once_after_grace(monkeypatch):
+    from GameSentenceMiner.util.platform import windows_window_monitor as wm
+
+    calls = []
+    monkeypatch.setattr(rs, "end_sessions_for_game", lambda name: calls.append(name) or [])
+    monitor = object.__new__(wm.WindowsWindowStateMonitor)
+    monitor._target_lost_since = None
+    monitor._session_ended_for_lost_target = False
+    monitor.last_scene_name = "Game One"
+    monitor._end_reading_session_after_target_lost(1000.0)
+    monitor._end_reading_session_after_target_lost(1000.0 + wm.TARGET_LOST_SESSION_END_SECONDS - 1)
+    assert calls == []  # a restart or loading screen within the grace period keeps the session
+    monitor._end_reading_session_after_target_lost(1000.0 + wm.TARGET_LOST_SESSION_END_SECONDS)
+    monitor._end_reading_session_after_target_lost(1000.0 + 500)
+    assert calls == ["Game One"]
+
+
+def test_obs_scene_change_ends_other_games_sessions(monkeypatch):
+    import threading
+
+    from GameSentenceMiner.obs import service as obs_service
+
+    calls = []
+    monkeypatch.setattr(rs, "end_sessions_on_game_change", lambda name: calls.append(name) or [])
+    monkeypatch.setattr(obs_service.gsm_state, "current_game", obs_service.gsm_state.current_game)
+    svc = object.__new__(obs_service.OBSService)
+    svc._state_lock = threading.Lock()
+    svc.state = obs_service.OBSState()
+    svc.check_output = False
+    svc._refresh_scene_items = lambda name: None
+    svc._schedule_fit_to_screen = lambda name, delay: None
+    svc._handle_current_program_scene_changed(SimpleNamespace(scene_name="Game Two"))
+    assert calls == ["Game Two"]

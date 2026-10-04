@@ -74,12 +74,16 @@ class TextCoordinatorState:
         cross_source_window: timedelta = timedelta(seconds=5),
         cross_source_similarity: int = 70,
         same_source_dedup_window: timedelta = timedelta(seconds=2),
+        loop_repeat_window: timedelta = timedelta(seconds=60),
+        loop_repeat_limit: int = 2,
         max_observation_ids: int = 20_000,
     ) -> None:
         self.session_id = session_id or str(uuid.uuid4())
         self.cross_source_window = cross_source_window
         self.cross_source_similarity = cross_source_similarity
         self.same_source_dedup_window = same_source_dedup_window
+        self.loop_repeat_window = loop_repeat_window
+        self.loop_repeat_limit = loop_repeat_limit
         self.max_observation_ids = max_observation_ids
         self.metrics = TextCoordinatorMetrics()
         self._records: list[TextRecordSnapshot] = []
@@ -93,6 +97,7 @@ class TextCoordinatorState:
             OrderedDict()
         )
         self._max_prefix_sources = 512
+        self._looping_texts: OrderedDict[str, int] = OrderedDict()
 
     def ingest(
         self,
@@ -138,6 +143,20 @@ class TextCoordinatorState:
                     revision=newest.revision,
                     reason="same text as immediately previous record",
                     matched_source=newest.source_kind.value,
+                )
+            )
+        looping = self._looping_repeat_of(full_processed, now_monotonic_ns)
+        if looping is not None:
+            self.metrics.duplicates += 1
+            return IngressResult(
+                IngressAck(
+                    IngressStatus.DUPLICATE,
+                    observation.observation_id,
+                    line_id=looping.line_id,
+                    stream_sequence=looping.stream_sequence,
+                    revision=looping.revision,
+                    reason="text repeating in a loop (title screen or animated text)",
+                    matched_source=looping.source_kind.value,
                 )
             )
 
@@ -356,6 +375,35 @@ class TextCoordinatorState:
                 incoming_text == current_text or fuzz.ratio(current_text, incoming_text) >= self.cross_source_similarity
             )
         )
+
+    def _looping_repeat_of(self, text: str, now_monotonic_ns: int) -> TextRecordSnapshot | None:
+        """Newest record of a text already seen loop_repeat_limit times within loop_repeat_window.
+
+        Dialogue can repeat once ("A, B, A"); a third copy within a minute is a hooked title screen
+        or animation cycling through the same strings.
+        """
+        compact = _compact(text)
+        if not compact or self.loop_repeat_limit <= 0 or not self._records:
+            return None
+        window_ns = int(self.loop_repeat_window.total_seconds() * 1_000_000_000)
+        # Once a text is caught looping, it stays suppressed while it keeps coming back.
+        last_seen = self._looping_texts.get(compact)
+        if last_seen is not None and now_monotonic_ns - last_seen <= window_ns:
+            self._looping_texts[compact] = now_monotonic_ns
+            self._looping_texts.move_to_end(compact)
+            return next((r for r in reversed(self._records) if _compact(r.text) == compact), self._records[-1])
+        matches: list[TextRecordSnapshot] = []
+        for record in reversed(self._records[-64:]):
+            if now_monotonic_ns - record.first_seen_monotonic_ns > window_ns:
+                break
+            if _compact(record.text) == compact:
+                matches.append(record)
+                if len(matches) >= self.loop_repeat_limit:
+                    self._looping_texts[compact] = now_monotonic_ns
+                    while len(self._looping_texts) > 256:
+                        self._looping_texts.popitem(last=False)
+                    return matches[0]
+        return None
 
     def _correlates_frozen_duplicate(
         self,

@@ -407,7 +407,7 @@ function ensureOcrSupervisorWired(): void {
         }
         if (state === 'starting') {
             sendToMainWindowFrames('ocr-started');
-            sendOcrStatus(true);
+            sendOcrStatus(true, activeOcrRunMode);
         } else if (state === 'stopped') {
             // Quiet during a restart's intermediate stop; only report a real stop.
             if (ocrStopRequested) {

@@ -84,7 +84,7 @@ def test_all_green_without_ai_test():
         ai_tester=lambda cfg: tester_calls.append(cfg),
     )
     checks = _by_id(result)
-    assert checks["text_source_luna"]["status"] == "ok"
+    assert checks["text_source"]["status"] == "ok"
     assert checks["recent_line"]["status"] == "ok"
     assert checks["ankiconnect"]["status"] == "ok"
     assert checks["anki_note_type"]["status"] == "ok"
@@ -99,32 +99,61 @@ def test_all_green_without_ai_test():
     assert result["summary"]["counts"]["fail"] == 0
 
 
-def test_luna_not_connected_fails_with_fix():
+NO_INHOUSE = ({}, {})
+
+
+def _source_check(status=None, inhouse=NO_INHOUSE, config=None):
     checks = _by_id(
         setup_check_api.run_checks(
-            config=_configured_ai(),
-            status=_status(websockets_connected={}),
+            config=config or _configured_ai(),
+            status=status if status is not None else _status(),
             anki_call=_fake_anki(),
+            inhouse=inhouse,
         )
     )
-    luna = checks["text_source_luna"]
-    assert luna["status"] == "fail"
-    assert "2333" in luna["fix"] and "network_websocket" in luna["fix"]
-    assert "LunaTranslator (localhost:2333): not connected" in luna["detail"]
+    return checks["text_source"]
 
 
-def test_luna_source_missing_from_config():
-    config = _configured_ai()
-    config.general.websocket_sources = [s for s in config.general.websocket_sources if "2333" not in s.uri]
-    checks = _by_id(setup_check_api.run_checks(config=config, status=_status(), anki_call=_fake_anki()))
-    assert checks["text_source_luna"]["status"] == "fail"
-    assert "No enabled source on port 2333" in checks["text_source_luna"]["detail"]
+def test_no_text_source_fails_with_fix():
+    check = _source_check(status=_status(websockets_connected={}))
+    assert check["status"] == "fail"
+    assert "Texthook tab" in check["fix"]
+    assert "LunaTranslator (localhost:2333): not connected" in check["detail"]
 
 
-def test_plain_ws_key_counts_as_connected():
-    status = _status(websockets_connected={"ws://localhost:2333": "LunaTranslator"})
-    checks = _by_id(setup_check_api.run_checks(config=_configured_ai(), status=status, anki_call=_fake_anki()))
-    assert checks["text_source_luna"]["status"] == "ok"
+def test_luna_websocket_counts_as_a_source():
+    check = _source_check()
+    assert check["status"] == "ok" and "LunaTranslator (localhost:2333)" in check["detail"]
+    plain = _source_check(status=_status(websockets_connected={"ws://localhost:2333": "LunaTranslator"}))
+    assert plain["status"] == "ok"
+
+
+def test_builtin_hook_counts_as_a_source_without_luna():
+    check = _source_check(status=_status(websockets_connected={}), inhouse=({"texthook": True}, {}))
+    assert check["status"] == "ok"
+    assert "GSM's built-in hook" in check["detail"]
+
+
+def test_hook_with_continuous_ocr_warns():
+    check = _source_check(
+        status=_status(websockets_connected={}),
+        inhouse=({"texthook": True, "ocr": True}, {"ocr": "auto"}),
+    )
+    assert check["status"] == "warn"
+    assert "Start Manual OCR" in check["fix"]
+
+
+def test_hook_with_ocr_on_demand_is_the_recommended_setup():
+    check = _source_check(
+        status=_status(websockets_connected={}),
+        inhouse=({"texthook": True, "ocr": True}, {"ocr": "manual"}),
+    )
+    assert check["status"] == "ok" and "on demand" in check["detail"]
+
+
+def test_ocr_alone_is_a_source():
+    check = _source_check(status=_status(websockets_connected={}), inhouse=({"ocr": True}, {"ocr": "auto"}))
+    assert check["status"] == "ok" and "GSM OCR" in check["detail"]
 
 
 def test_stale_last_line_warns():
@@ -330,3 +359,14 @@ def test_routes(client, monkeypatch):
     page = client.get("/setup-check")
     assert page.status_code == 200
     assert b"setup_check.js" in page.data
+
+
+def test_inhouse_source_mode_is_recorded_and_cleared(monkeypatch):
+    from GameSentenceMiner import gametext
+
+    monkeypatch.setattr(gametext, "inhouse_sources_active", {})
+    monkeypatch.setattr(gametext, "inhouse_source_modes", {})
+    gametext.set_inhouse_source_active("ocr", True, mode="manual")
+    assert setup_check_api._inhouse_sources() == ({"ocr": True}, {"ocr": "manual"})
+    gametext.set_inhouse_source_active("ocr", False)
+    assert setup_check_api._inhouse_sources() == ({"ocr": False}, {"ocr": ""})

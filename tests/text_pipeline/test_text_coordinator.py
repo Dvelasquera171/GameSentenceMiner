@@ -571,3 +571,41 @@ def test_actor_schedules_the_full_cross_source_upgrade_window_for_ocr():
         actor.stop(drain=True, timeout=1)
 
     assert scheduled == [(result.ack.line_id, 5.0)]
+
+
+def _hook_line(state, text, index, seconds):
+    received_ns = int((1 + seconds) * 1_000_000_000)
+    item = observation(
+        text,
+        SourceKind.TEXTHOOK,
+        f"hook-{index}",
+        emitted_at=NOW + timedelta(seconds=seconds),
+        source_instance="hook-1",
+    )
+    item = TextObservation(**{**item.__dict__, "received_monotonic_ns": received_ns})
+    return state.ingest(item, now=NOW + timedelta(seconds=seconds), now_monotonic_ns=received_ns)
+
+
+def test_title_screen_cycling_through_three_texts_stops_after_two_rounds():
+    # Nekopara's animated title screen, hooked: three strings repeating every few seconds.
+    state = TextCoordinatorState(session_id="session")
+    texts = ["ネコぱらネコぱら", "ソレイユ開店しました！", "表示速度のサンプルです。"]
+    results = [_hook_line(state, texts[i % 3], i, i * 3.2) for i in range(30)]
+
+    assert [record.text for record in state.snapshot().records] == texts + texts
+    assert all(r.ack.status is IngressStatus.DUPLICATE for r in results[6:])
+    assert results[6].ack.reason == "text repeating in a loop (title screen or animated text)"
+
+
+def test_dialogue_repeated_once_is_kept_and_old_text_may_return_after_a_minute():
+    state = TextCoordinatorState(session_id="session")
+    _hook_line(state, "はい", 0, 0)
+    _hook_line(state, "そうか", 1, 5)
+    second = _hook_line(state, "はい", 2, 10)
+    assert second.ack.status is IngressStatus.ACCEPTED
+    _hook_line(state, "行こう", 3, 20)
+    third_soon = _hook_line(state, "はい", 4, 30)
+    assert third_soon.ack.status is IngressStatus.DUPLICATE
+    _hook_line(state, "また明日", 5, 100)
+    later = _hook_line(state, "はい", 6, 120)
+    assert later.ack.status is IngressStatus.ACCEPTED

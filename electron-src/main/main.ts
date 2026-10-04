@@ -3376,6 +3376,7 @@ export function sendTextHookStatus(active: boolean): void {
 
 // Same as above for the OCR process. Driven from the OCR lifecycle so a crash
 // (not just a graceful stop) still resumes clipboard polling.
-export function sendOcrStatus(active: boolean): void {
-    sendBackendCommand('ocr_status', { active });
+export function sendOcrStatus(active: boolean, mode: string | null = null): void {
+    // mode ('auto' | 'manual') lets the backend tell continuous OCR from OCR on demand.
+    sendBackendCommand('ocr_status', mode ? { active, mode } : { active });
 }

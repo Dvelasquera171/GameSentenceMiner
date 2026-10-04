@@ -29,7 +29,6 @@ STATUS_WARN = "warn"
 STATUS_FAIL = "fail"
 STATUS_SKIP = "skip"
 
-LUNA_PORT = "2333"
 RECENT_LINE_SECONDS = 15 * 60
 RECENT_NOTES_DAYS = 7
 AI_TEST_COOLDOWN_SECONDS = 15
@@ -103,7 +102,7 @@ def _source_connected(uri: str, connected: dict[str, str]) -> bool:
     return any(str(key) == prefix or str(key).startswith(prefix + "/") for key in connected)
 
 
-def check_text_sources(config, status: dict) -> list[Check]:
+def check_text_sources(config, status: dict, inhouse: tuple[dict, dict] | None = None) -> list[Check]:
     general = config.general
     connected = status.get("websockets_connected") or {}
     if isinstance(connected, list):
@@ -116,48 +115,60 @@ def check_text_sources(config, status: dict) -> list[Check]:
         )
         or "none"
     )
-    luna = next((s for s in sources if s.uri.strip().endswith(":" + LUNA_PORT)), None)
-    luna_fix = (
-        "Start LunaTranslator and open a game; in Luna, Settings → Network → WebSocket must be on "
-        f"(network_websocket), port {LUNA_PORT}. In GSM, Settings → Text sources must list localhost:{LUNA_PORT}."
+    inhouse, modes = _inhouse_sources() if inhouse is None else inhouse
+    hook = bool(inhouse.get("texthook"))
+    ocr = bool(inhouse.get("ocr"))
+    ocr_mode = str(modes.get("ocr") or "")
+    external = (
+        [f"{s.name or s.uri} ({s.uri})" for s in sources if _source_connected(s.uri, connected)]
+        if general.use_websocket
+        else []
     )
-    if not general.use_websocket:
-        luna_check = Check(
-            "text_source_luna",
-            "Text source: LunaTranslator",
-            STATUS_FAIL,
-            f"Websocket text sources are turned off in GSM. Configured sources: {listing}.",
-            "GSM Settings → General: enable websocket text sources. " + luna_fix,
+    readers = (["GSM's built-in hook"] if hook else []) + external
+    title = "Text source"
+    start_fix = (
+        "Start the game's hook: GSM → Texthook tab → choose the game and its hook (or start LunaTranslator / "
+        "Agent if you use them). For a game that cannot be hooked, start OCR instead."
+    )
+    if not readers and not ocr:
+        detail = "Nothing is reading text from a game."
+        if sources:
+            detail += f" Websocket sources GSM listens to: {listing}."
+        source_check = Check("text_source", title, STATUS_FAIL, detail, start_fix)
+    elif readers and ocr and ocr_mode != "manual":
+        source_check = Check(
+            "text_source",
+            title,
+            STATUS_WARN,
+            f"Text comes from {', '.join(readers)}, and OCR is also scanning the screen continuously. "
+            "For a hooked game that only adds duplicate or misread lines.",
+            "Set this game's OCR to on demand (Start Manual OCR) and use the OCR hotkey for pictures or text "
+            "the hook misses.",
         )
-    elif luna is None:
-        luna_check = Check(
-            "text_source_luna",
-            "Text source: LunaTranslator",
-            STATUS_FAIL,
-            f"No enabled source on port {LUNA_PORT}. Configured sources: {listing}.",
-            luna_fix,
-        )
-    elif _source_connected(luna.uri, connected):
-        luna_check = Check(
-            "text_source_luna",
-            "Text source: LunaTranslator",
-            STATUS_OK,
-            f"Connected to {luna.uri}. All sources: {listing}.",
-        )
+    elif readers:
+        detail = f"Text comes from {', '.join(readers)}."
+        if ocr:
+            detail += " OCR is ready on demand (hotkey) for pictures or text the hook misses."
+        source_check = Check("text_source", title, STATUS_OK, detail)
     else:
-        luna_check = Check(
-            "text_source_luna",
-            "Text source: LunaTranslator",
-            STATUS_FAIL,
-            f"GSM is listening for {luna.uri} but Luna is not connected. All sources: {listing}.",
-            luna_fix,
-        )
-    return [luna_check, check_recent_line(status)]
+        mode_text = "on demand (hotkey)" if ocr_mode == "manual" else "scanning the screen"
+        source_check = Check("text_source", title, STATUS_OK, f"Text comes from GSM OCR, {mode_text}.")
+    return [source_check, check_recent_line(status)]
+
+
+def _inhouse_sources() -> tuple[dict, dict]:
+    """GSM's own text sources (built-in hook, OCR) and how they run."""
+    try:
+        from GameSentenceMiner.gametext import inhouse_source_modes, inhouse_sources_active
+
+        return dict(inhouse_sources_active), dict(inhouse_source_modes)
+    except Exception:  # noqa: BLE001 - the page must render even if text intake is not up
+        return {}, {}
 
 
 def check_recent_line(status: dict, now: datetime | None = None) -> Check:
     title = "Text received recently"
-    fix = "Hook the game in Luna; text should appear on the texthooker page."
+    fix = "Advance the game's text; lines should appear on the texthooker page."
     raw = status.get("last_line_received")
     if not raw:
         return Check("recent_line", title, STATUS_WARN, "No line received since GSM started.", fix)
@@ -520,11 +531,12 @@ def run_checks(
     anki_call: Callable | None = None,
     ai_tester: Callable | None = None,
     extra_checks: list[Callable[[], list[Check]]] | None = None,
+    inhouse: tuple[dict, dict] | None = None,
 ) -> dict:
     config = config or get_config()
     status = status if status is not None else gsm_status.to_dict()
     checks: list[Check] = []
-    checks.extend(check_text_sources(config, status))
+    checks.extend(check_text_sources(config, status, inhouse))
     checks.append(check_texthooker(config))
     checks.extend(check_anki(config, anki_call))
     checks.append(check_ai_configured(config))

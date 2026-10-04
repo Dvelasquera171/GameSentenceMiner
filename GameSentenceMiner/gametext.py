@@ -81,6 +81,8 @@ text_monitor_initialized = False
 # In-house text sources (OCR, texthook). Like a connected websocket, an active
 # in-house source pauses clipboard intake so the same line isn't ingested twice.
 inhouse_sources_active = {}
+# How an active in-house source runs, when known (OCR: "auto" scans continuously, "manual" waits for a hotkey).
+inhouse_source_modes = {}
 
 # Skip-spam detection is enforced at the shared ingress boundary so clipboard,
 # websocket, OCR, and integrated hooks all take the same path.
@@ -355,7 +357,7 @@ def is_message_rate_limited(source="clipboard"):
 # ---------------------------------------------------------------------------
 
 
-def set_inhouse_source_active(source: str, active: bool) -> None:
+def set_inhouse_source_active(source: str, active: bool, mode: str = "") -> None:
     """Mark an in-house text source (e.g. "ocr", "texthook") active or inactive.
 
     Mirrors websocket connect/disconnect: while any in-house source is active,
@@ -366,6 +368,7 @@ def set_inhouse_source_active(source: str, active: bool) -> None:
     if not key:
         return
     inhouse_sources_active[key] = bool(active)
+    inhouse_source_modes[key] = str(mode or "") if active else ""
     logger.info(f"In-house text source '{key}' {'started' if active else 'stopped'}.")
 
     # Report the actual clipboard outcome, not just this source's state: a still

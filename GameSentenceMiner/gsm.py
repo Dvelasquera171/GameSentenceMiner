@@ -1615,10 +1615,11 @@ class GSMApplication:
     def _handle_inhouse_source_status(self, source: str, data: Optional[dict]) -> None:
         """Pause/resume clipboard polling when an in-house source (OCR/texthook) starts/stops."""
         active = bool(data.get("active")) if isinstance(data, dict) else False
+        mode = str(data.get("mode") or "") if isinstance(data, dict) else ""
         try:
             from GameSentenceMiner import gametext as gametext_module
 
-            gametext_module.set_inhouse_source_active(source, active)
+            gametext_module.set_inhouse_source_active(source, active, mode=mode)
         except Exception as e:
             logger.background(f"Failed to set in-house source status for {source}: {e}")
 

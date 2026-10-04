@@ -152,13 +152,16 @@ def test_run_chunks_merges_and_batches_quiz():
     ai = _FakeAI()
     gen = sr.SessionReviewGenerator(ai, native_language="English", chunk_chars=100)
     stages = []
-    result = gen.run(_lines(10, chars=30), "Game", progress=lambda s, d: stages.append(s), question_count=12)
+    lines = _lines(10, chars=30)
+    lines[0] = sr.ReviewLine(id="l0", text="「もう少しで落ちそうになったよ」".ljust(30, "あ"), timestamp=0.0)
+    result = gen.run(lines, "Game", progress=lambda s, d: stages.append((s, d)), question_count=12)
 
     kinds = [k for k, _, _ in ai.calls]
     assert kinds.count("session_review_digest") == 4
     assert kinds.count("session_review_merge") == 1
     assert kinds.count("session_review_quiz") == 2  # 8 + 4
-    assert stages[:4] == ["digest"] * 4 and "merge" in stages and "quiz" in stages
+    assert [s for s, _ in stages[:4]] == ["digest"] * 4 and ("merge", "") in stages
+    assert ("quiz", "0/12") in stages and ("quiz", "8/12") in stages
 
     assert result.summary_ja == "全体の要約" and result.summary_en == "Overall summary"
     assert result.highlights[0].confidence == 0.9 and result.highlights[0].category == "aspect_modality"
@@ -220,3 +223,64 @@ def test_call_gives_up_after_retry():
 
     with pytest.raises(sr.SessionReviewError):
         sr.SessionReviewGenerator(Broken())._call("p", "k", 10)
+
+
+# --- consistency pass ---------------------------------------------------------
+
+
+def _hl(line_id, quote):
+    return sr.Highlight(line_id=line_id, quote=quote, construction="c")
+
+
+def _q(qid, sources):
+    return sr.QuizQuestion(id=qid, kind="events", question_ja="質問", source_line_ids=sources)
+
+
+CONSISTENCY_LINES = [
+    sr.ReviewLine(id="a", text="「もう少しで落ちそうになったよ」"),
+    sr.ReviewLine(id="b", text="別に、心配してたわけじゃないけど。"),
+]
+
+
+def test_consistency_keeps_real_quotes_and_repairs_wrong_line_ids():
+    highlights, quiz, notes = sr.check_consistency(
+        [_hl("a", "落ちそうになった"), _hl("a", "心配してたわけじゃない"), _hl("zzz", "「別に、心配してた…」")],
+        [],
+        CONSISTENCY_LINES,
+    )
+    assert [(h.line_id, h.quote) for h in highlights] == [
+        ("a", "落ちそうになった"),
+        ("b", "心配してたわけじゃない"),
+        ("b", "「別に、心配してた…」"),
+    ]
+    assert notes["highlights_relinked"] == 2 and notes["highlights_dropped"] == 0
+
+
+def test_consistency_drops_invented_quotes():
+    highlights, _, notes = sr.check_consistency([_hl("a", "空を飛んだ"), _hl("a", "")], [], CONSISTENCY_LINES)
+    assert highlights == [] and notes["highlights_dropped"] == 2
+
+
+def test_consistency_filters_quiz_sources():
+    _, quiz, notes = sr.check_consistency(
+        [],
+        [_q("q1", ["a", "x"]), _q("q2", ["x", "y"]), _q("q3", [])],
+        CONSISTENCY_LINES,
+    )
+    assert [(q.id, q.source_line_ids) for q in quiz] == [("q1", ["a"]), ("q3", [])]
+    assert notes["questions_dropped"] == 1
+
+
+def test_consistency_never_drops_every_question():
+    _, quiz, notes = sr.check_consistency([], [_q("q1", ["x"]), _q("q2", ["y"])], CONSISTENCY_LINES)
+    assert [(q.id, q.source_line_ids) for q in quiz] == [("q1", []), ("q2", [])]
+    assert notes["questions_dropped"] == 0
+
+
+def test_run_applies_the_consistency_pass():
+    ai = _FakeAI()
+    gen = sr.SessionReviewGenerator(ai, native_language="English")
+    # Lines without the quoted phrase: the fake model's highlight is invented and must go.
+    result = gen.run(_lines(5, chars=30), "Game", question_count=2)
+    assert result.highlights == []
+    assert len(result.quiz) == 2 and result.quiz[0].source_line_ids == ["l0"]

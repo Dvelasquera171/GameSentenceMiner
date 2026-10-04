@@ -186,6 +186,72 @@ def _highlight_from_dict(data: dict) -> Highlight:
     return Highlight(**{k: (v if v is not None else "") for k, v in fields.items()})
 
 
+_QUOTE_EDGES = "「」『』“”\"'（）()。、！？!?…‥ 　"
+
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def _quote_in_line(quote: str, line_text: str) -> bool:
+    """Every ellipsis-separated part of the quote appears, in order, in the line (whitespace ignored)."""
+    haystack = _normalize_for_match(line_text)
+    parts = [p.strip(_QUOTE_EDGES) for p in re.split(r"…|‥|\.\.\.", _normalize_for_match(quote))]
+    parts = [p for p in parts if p]
+    if not parts:
+        return False
+    position = 0
+    for part in parts:
+        found = haystack.find(part, position)
+        if found < 0:
+            return False
+        position = found + len(part)
+    return True
+
+
+def check_consistency(
+    highlights: Sequence[Highlight], quiz: Sequence[QuizQuestion], lines: Sequence[ReviewLine]
+) -> tuple[List[Highlight], List[QuizQuestion], dict]:
+    """Drop model output that points at text the session does not contain.
+
+    Highlights must quote a real line: a wrong line_id is repaired when the quote is found elsewhere,
+    an invented quote is dropped. Quiz questions whose cited source lines all do not exist are dropped,
+    unless that would leave no questions (then their invalid ids are cleared instead).
+    """
+    by_id = {ln.id: ln for ln in lines}
+    kept_highlights: List[Highlight] = []
+    notes = {"highlights_relinked": 0, "highlights_dropped": 0, "questions_dropped": 0}
+    for highlight in highlights:
+        line = by_id.get(highlight.line_id)
+        if line is not None and _quote_in_line(highlight.quote, line.text):
+            kept_highlights.append(highlight)
+            continue
+        match = next((ln for ln in lines if _quote_in_line(highlight.quote, ln.text)), None)
+        if match is None:
+            notes["highlights_dropped"] += 1
+            continue
+        highlight.line_id = match.id
+        notes["highlights_relinked"] += 1
+        kept_highlights.append(highlight)
+
+    cleaned: List[QuizQuestion] = []
+    unsupported: List[QuizQuestion] = []
+    for question in quiz:
+        valid = [lid for lid in question.source_line_ids if lid in by_id]
+        if question.source_line_ids and not valid:
+            unsupported.append(question)
+            continue
+        question.source_line_ids = valid
+        cleaned.append(question)
+    if cleaned:
+        notes["questions_dropped"] = len(unsupported)
+    else:
+        for question in unsupported:
+            question.source_line_ids = []
+        cleaned = list(unsupported)
+    return kept_highlights, cleaned, notes
+
+
 def _question_from_dict(data: dict, fallback_id: str) -> Optional[QuizQuestion]:
     question = str(data.get("question_ja") or "").strip()
     if not question:
@@ -271,6 +337,7 @@ class SessionReviewGenerator:
         lines: Sequence[ReviewLine],
         game_title: str,
         count: int,
+        progress: Optional[ProgressCallback] = None,
     ) -> List[QuizQuestion]:
         """Batched so each call stays small; later batches see earlier questions to avoid repeats."""
         char_count = sum(len(ln.text) for ln in lines)
@@ -310,6 +377,8 @@ class SessionReviewGenerator:
             if not batch:
                 raise SessionReviewError("Quiz generation returned no questions")
             questions.extend(batch[:batch_count])
+            if progress and len(questions) < count:
+                progress("quiz", f"{len(questions)}/{count}")
         return questions
 
     def grade_answer(
@@ -368,13 +437,18 @@ class SessionReviewGenerator:
 
         count = question_count if question_count is not None else quiz_question_count(char_count)
         notify("quiz", f"0/{count}")
-        quiz = self.generate_quiz(merged, digests, lines, game_title, count) if count > 0 else []
+        quiz = self.generate_quiz(merged, digests, lines, game_title, count, progress=notify) if count > 0 else []
+
+        highlights = [_highlight_from_dict(h) for h in _as_list(merged.get("highlights")) if isinstance(h, dict)]
+        highlights, quiz, notes = check_consistency(highlights, quiz, lines)
+        if any(notes.values()) and self.logger is not None:
+            self.logger.info(f"Session review consistency pass: {notes}")
 
         return SessionReviewResult(
             summary_ja=str(merged.get("summary_ja") or ""),
             summary_en=str(merged.get("summary_en") or ""),
             characters=[c for c in _as_list(merged.get("characters")) if isinstance(c, dict)],
-            highlights=[_highlight_from_dict(h) for h in _as_list(merged.get("highlights")) if isinstance(h, dict)],
+            highlights=highlights,
             may_have_missed_ja=[str(x) for x in _as_list(merged.get("may_have_missed_ja"))],
             may_have_missed_en=[str(x) for x in _as_list(merged.get("may_have_missed_en"))],
             quiz=quiz,

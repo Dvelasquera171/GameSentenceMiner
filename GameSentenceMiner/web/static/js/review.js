@@ -33,7 +33,7 @@
         const { games } = await api('/api/review/games');
         const sel = $('gameSelect');
         sel.innerHTML = games.map((g) => `<option value="${esc(g.game_key)}">${esc(g.game_name || g.game_key)} (${g.line_count} lines)</option>`).join('');
-        const wanted = new URLSearchParams(location.search).get('game_key');
+        const wanted = state.gameKey || new URLSearchParams(location.search).get('game_key');
         if (wanted && games.some((g) => g.game_key === wanted)) sel.value = wanted;
         state.gameKey = sel.value;
         sel.onchange = () => { state.gameKey = sel.value; loadSessions(); loadReviews(); };
@@ -44,17 +44,76 @@
         if (!state.gameKey) { body.innerHTML = '<tr><td colspan="6" class="rv-muted">No games with lines yet.</td></tr>'; return; }
         try {
             const { sessions } = await api(`/api/review/sessions?game_key=${encodeURIComponent(state.gameKey)}`);
-            body.innerHTML = sessions.length ? sessions.map((s) => `
+            body.innerHTML = sessions.length ? sessions.map((s, i) => `
                 <tr>
                     <td>${esc(fmtTime(s.start_ts))}</td><td>${esc(fmtDur(s.duration_seconds))}</td>
                     <td>${s.line_count}</td><td>${s.char_count}</td>
                     <td><span class="rv-pill ${esc(s.source)}">${esc(s.source)}</span></td>
-                    <td><button class="control-btn genBtn" data-start="${s.start_ts}" data-end="${s.end_ts}">Generate review</button></td>
-                </tr>`).join('') : '<tr><td colspan="6" class="rv-muted">No sessions for this game.</td></tr>';
-            body.querySelectorAll('.genBtn').forEach((b) => (b.onclick = () => generate(+b.dataset.start, +b.dataset.end, b)));
+                    <td class="rv-row">
+                        <button class="control-btn genBtn" data-i="${i}">Generate review</button>
+                        <button class="rv-link linesBtn" data-i="${i}">Lines</button>
+                        <button class="rv-link deleteLinesBtn" data-i="${i}" title="Delete this session's lines (also removes them from stats)">Delete lines</button>
+                        ${s.manual_id ? `<button class="rv-link removeMarkBtn" data-i="${i}" title="Remove the Start/End mark; the lines stay">Remove mark</button>` : ''}
+                    </td>
+                </tr>
+                <tr class="rv-lines" data-i="${i}" style="display:none;"><td colspan="6"></td></tr>`).join('') : '<tr><td colspan="6" class="rv-muted">No sessions for this game.</td></tr>';
+            const at = (b) => sessions[+b.dataset.i];
+            body.querySelectorAll('.genBtn').forEach((b) => (b.onclick = () => generate(at(b).start_ts, at(b).end_ts, b)));
+            body.querySelectorAll('.linesBtn').forEach((b) => (b.onclick = () => toggleLines(at(b), body.querySelector(`tr.rv-lines[data-i="${b.dataset.i}"]`))));
+            body.querySelectorAll('.deleteLinesBtn').forEach((b) => (b.onclick = () => deleteSessionLines(at(b), b)));
+            body.querySelectorAll('.removeMarkBtn').forEach((b) => (b.onclick = () => removeMark(at(b), b)));
             const { sessions: open } = await api('/api/review/sessions/open');
             $('openSessionBadge').textContent = open.length ? `Open session: ${open.map((o) => `${o.game_name || o.game_key} since ${fmtTime(o.start_ts)}`).join(', ')}` : '';
         } catch (err) { body.innerHTML = `<tr><td colspan="6">${esc(err.message)}</td></tr>`; }
+    }
+
+    function sessionLinesUrl(s) {
+        return `/api/review/session-lines?game_key=${encodeURIComponent(s.game_key || state.gameKey)}&start_ts=${s.start_ts}&end_ts=${s.end_ts}`;
+    }
+
+    async function toggleLines(s, row) {
+        if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+        const cell = row.querySelector('td');
+        cell.innerHTML = '<span class="rv-spinner"></span>';
+        row.style.display = '';
+        try {
+            const { lines } = await api(sessionLinesUrl(s));
+            const shown = lines.slice(0, 300);
+            cell.innerHTML = `<div class="rv-ja" lang="ja" style="max-height:320px; overflow:auto; font-size:15px;">${shown.map((ln) =>
+                `<div><span class="rv-muted">${esc(new Date(ln.timestamp * 1000).toLocaleTimeString())}</span> ${esc(ln.text)}</div>`).join('')}</div>
+                ${lines.length > shown.length ? `<div class="rv-muted">…and ${lines.length - shown.length} more</div>` : ''}`;
+        } catch (err) { showError(cell, err); }
+    }
+
+    async function deleteSessionLines(s, button) {
+        button.disabled = true;
+        try {
+            const { lines, char_count } = await api(sessionLinesUrl(s));
+            if (!lines.length) { alert('This session has no lines left.'); return; }
+            const question = `Delete ${lines.length} lines (${char_count} characters) of ${s.game_name || s.game_key}, `
+                + `${fmtTime(s.start_ts)} → ${fmtTime(s.end_ts)}?\n\nThey are also removed from your stats. This cannot be undone.`;
+            if (!confirm(question)) return;
+            const result = await api('/api/delete-sentence-lines', { method: 'POST', body: JSON.stringify({ line_ids: lines.map((ln) => ln.id) }) });
+            alert(result.message || `Deleted ${result.deleted_count} lines.`);
+            await loadGames();
+            await loadSessions();
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    async function removeMark(s, button) {
+        if (!confirm('Remove this Start/End mark? The lines stay and fall back into automatic sessions.')) return;
+        button.disabled = true;
+        try {
+            await api(`/api/review/sessions/${s.manual_id}/delete`, { method: 'POST', body: '{}' });
+            await loadSessions();
+        } catch (err) {
+            alert(err.message);
+            button.disabled = false;
+        }
     }
 
     async function generate(start, end, button, gameKey = state.gameKey, gameName = '') {

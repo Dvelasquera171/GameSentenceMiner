@@ -187,6 +187,35 @@ def register_session_review_routes(app):
         )
         return jsonify({"closed": [vars(r) for r in closed]}), 200
 
+    @app.route("/api/review/session-lines", methods=["GET"])
+    def review_session_lines():
+        """Lines of one session, so the page can show them and delete them via /api/delete-sentence-lines."""
+        game_key = str(request.args.get("game_key") or "").strip()
+        start_ts, end_ts = _float(request.args.get("start_ts")), _float(request.args.get("end_ts"))
+        if not game_key or start_ts is None or end_ts is None or end_ts < start_ts:
+            return jsonify({"error": "game_key, start_ts and end_ts are required"}), 400
+        lines = reading_sessions.get_session_lines(game_key, start_ts, end_ts)
+        return jsonify(
+            {
+                "lines": [
+                    {"id": str(ln.id), "timestamp": _float(ln.timestamp, 0.0), "text": str(ln.line_text or "")}
+                    for ln in lines
+                ],
+                "char_count": sum(len(ln.line_text or "") for ln in lines),
+            }
+        ), 200
+
+    @app.route("/api/review/sessions/<int:session_id>/delete", methods=["POST"])
+    def review_delete_session_mark(session_id: int):
+        """Remove a manual Start/End mark. The lines stay; they fall back into automatic sessions."""
+        from GameSentenceMiner.util.database.session_review_tables import ReadingSessionsTable
+
+        row = ReadingSessionsTable.get(session_id)
+        if row is None:
+            return jsonify({"error": "Session not found"}), 404
+        row.delete()
+        return jsonify({"deleted": session_id}), 200
+
     @app.route("/api/review/generate", methods=["POST"])
     def review_generate():
         data = request.get_json(silent=True) or {}

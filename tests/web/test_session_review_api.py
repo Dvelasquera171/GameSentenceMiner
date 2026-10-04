@@ -196,3 +196,29 @@ def test_grade_rejects_unknown_question_and_unready_review(client, monkeypatch):
 def test_review_page_renders(client):
     res = client.get("/review")
     assert res.status_code == 200 and b"review.js" in res.data
+
+
+def test_session_lines_route(client, monkeypatch):
+    rows = [
+        SimpleNamespace(id="l1", timestamp=5.0, line_text="一行"),
+        SimpleNamespace(id="l2", timestamp=6.0, line_text="二"),
+    ]
+    seen = []
+    monkeypatch.setattr(session_review_api.reading_sessions, "get_session_lines", lambda *a: seen.append(a) or rows)
+    data = client.get("/api/review/session-lines?game_key=g1&start_ts=0&end_ts=10").json
+    assert data == {
+        "lines": [{"id": "l1", "timestamp": 5.0, "text": "一行"}, {"id": "l2", "timestamp": 6.0, "text": "二"}],
+        "char_count": 3,
+    }
+    assert seen == [("g1", 0.0, 10.0)]
+    assert client.get("/api/review/session-lines?game_key=g1&start_ts=10&end_ts=0").status_code == 400
+
+
+def test_remove_manual_session_mark(client):
+    from GameSentenceMiner.util.database.session_review_tables import ReadingSessionsTable
+
+    row = ReadingSessionsTable(game_key="g1", game_name="Game", start_ts=1.0, end_ts=2.0, status="closed")
+    row.save()
+    assert client.post(f"/api/review/sessions/{row.id}/delete").status_code == 200
+    assert ReadingSessionsTable.get(row.id) is None
+    assert client.post(f"/api/review/sessions/{row.id}/delete").status_code == 404

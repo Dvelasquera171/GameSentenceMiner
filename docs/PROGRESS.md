@@ -142,8 +142,11 @@ also work; the newest file wins). GSM pushes them into the overlay's Yomitan.
   or GSM Settings → Overlay → **Sync Yomitan from Firefox export now** (next to **Open sync folder**).
 - The overlay records what it applied in `%APPDATA%\gsm_overlay\yomitan_sync_state.json`, so the
   setup page can say "synced" or "export is newer" across restarts.
-- In dev the overlay runs in-process from `GSM_Overlay/main.js`, so restarting GSM is enough; no
-  overlay build step.
+- In dev GSM starts the overlay as a separate process (`npm run start` in `GSM_Overlay/`, output
+  hidden), so it needs `GSM_Overlay/node_modules`. Those were missing on this PC until 2026-10-04,
+  which is why the overlay never started (GSM retried every second and logged "launched
+  successfully" each time). Installed then; the lockfile was out of sync upstream and is fixed.
+  No build step is needed after code changes; restart the overlay.
 - Files: `GSM_Overlay/yomitan_sync.js` (+ 3 small hooks in `main.js`), `GameSentenceMiner/util/yomitan_sync.py`,
   `web/yomitan_sync_api.py`, `web/overlay_handler.py`, `ui/config/tabs/overlay.py`, `gsm.py` (starts the watcher).
   Tests: `GSM_Overlay/tests/yomitan_sync.test.cjs` (12), `tests/web/test_yomitan_sync.py` (23).

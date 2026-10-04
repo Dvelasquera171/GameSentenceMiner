@@ -21,9 +21,17 @@ Yomitan in `%APPDATA%\gsm_overlay`.
 | A/B/C | Finish Session Review (page, session buttons, prompt tuning) | medium | local agent, see SESSION_REVIEW.md |
 | D | Non-game sources (anime, manga) | small + research | local agent |
 | F | Deploy to a second PC with few clicks | small | jp-mining-tools scripts |
+| H | One-click session start from the GSM Home tab | small | local agent, after E |
 
 Everything below is a plan, not a contract. Additive API fields are fine; a new table, a changed
 API shape, or any write to Anki needs the owner's OK first.
+
+### Decisions taken (2026-10-04)
+- **Y merge rule:** the overlay syncs dictionaries, Anki card formats, translation, parsing and
+  audio from the Firefox export and keeps its own scanning/popup/input settings. Card consistency
+  is the hard requirement: the health page must assert that the overlay's and Firefox's Anki card
+  formats (deck, model, field mapping) are identical after a sync, and fail the row if not.
+- **Health page AI row** runs the test call only on explicit Re-check, never on page load.
 
 ---
 
@@ -180,9 +188,42 @@ Nothing anime- or manga-specific should go into GSM; only item 1 is GSM code.
 
 ---
 
+### How anime and manga would actually flow
+- **Anime, two routes.** (a) *mpv + mpv_websocket* (the usual mining setup): the script emits
+  each subtitle line over a websocket; GSM adds that port as a text source and everything else
+  already works. Near-zero GSM work. (b) *asbplayer in the browser*: verify whether its websocket
+  integration can push the current subtitle out; if not, a small bridge or route (a) is the
+  answer. In both cases asbplayer/mpv already make audio+image cards, so GSM must **not** add OBS
+  replay media to those cards: a per-source rule "log and translate only, no media" is needed
+  (field policy already has coalesce/overwrite modes; this adds a source-level switch).
+- **Manga:** manatan (or mokuro/manga-ocr) → clipboard → GSM clipboard source → lines filed under
+  the title override. Cards come from Yomitan on the texthooker page as usual. No screenshots
+  from GSM (there is no OBS scene); the Picture field stays Yomitan's.
+- **Sessions:** the title override plus the manual Start/End buttons give one session per
+  episode or chapter; the gap rule still splits long pauses.
+
+## H. One-click session start (fewer clicks, one hub)
+Today a session is: start Luna, attach to the game, start GSM, start OBS, open the texthooker in
+Firefox, start Anki. GSM's Home/Launcher tab already launches a game with its OBS scene and can
+launch Agent alongside it. Extend that into one **Start session** action per game profile:
+1. launch the game (existing), 2. launch LunaTranslator and, where Luna supports it, auto-attach
+to the process (research Luna's command line / `userconfig` autostart options), 3. start Anki if
+not running (path setting), 4. open the texthooker in the configured browser (Firefox path
+setting; today GSM uses the system default), 5. start a manual reading session
+(`POST /api/review/sessions/start`), 6. show the health summary from E. Stop session reverses
+1 and 5 and, once Session Review is done, offers "Generate review".
+The hub is therefore the GSM Home tab for starting/stopping and the Flask pages in Firefox for
+reading, review and setup. Nothing new to install.
+
 ## F. Deploy to a second PC with few clicks
-Not GSM code. The `jp-mining-tools` repo already holds redacted snapshots of every config; the
-natural next step there is an `apply_setup.py` that writes GSM `config.json` (profile), Luna's
-`userconfig/config.json` (hooker-only, websocket on), and prints the two Yomitan import clicks,
-reading secrets from environment variables. Depends on E for verification: run the health page
-after applying. Plan it after E lands.
+Two parts.
+- **App:** do not run from source on the laptop. Build the installer once on the desktop
+  (`npm run app:dist`), install that on the laptop; keep source-based development on the desktop
+  only. Avoids Rust/VS Build Tools on the laptop.
+- **Config:** `jp-mining-tools` already holds redacted snapshots of every config. Add
+  `scripts/apply_setup.py` there: writes GSM `config.json` (the profile, secrets from environment
+  variables, never from the repo), Luna's `userconfig/config.json` (hooker-only, websocket on),
+  pushes the Lapis note type to Anki via AnkiConnect if missing (templates are in the snapshot;
+  warn about the one-way AnkiWeb sync), and prints the two Yomitan import clicks (settings +
+  dictionary collection; Firefox cannot be driven from outside). Verification is the health page
+  from E. Plan it after E lands.

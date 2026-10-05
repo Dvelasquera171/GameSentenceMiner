@@ -348,7 +348,7 @@ browser to GSM; GSM files each line under its own title. See `gsm_connect/README
 | What | Commit |
 |---|---|
 | GSM: `POST /api/connect/lines`, source kind `browser`, per-line title, no OBS media on browser cards, burst-safe, Ask AI titled by the newest line | `a586732e` |
-| Extension + setup-check row + Home card mention | (this commit) |
+| Extension + setup-check row + Home card mention | `4bd9f092` |
 
 - **Reads:** asbplayer subtitles (any site and its own player; first track), YouTube captions,
   Manatan anime subtitles and manga text boxes, Netflix captions, `<video>` subtitle tracks, mokuro

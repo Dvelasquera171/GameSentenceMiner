@@ -83,7 +83,17 @@
       "sectionWindows": "Windows / Games",
       "sectionCaptureCards": "Capture Cards / Cameras",
       "notSupportedOS": "Need to set up game capture in OBS on this OS.",
-      "notSupportedTooltip": "Not supported on this OS"
+      "notSupportedTooltip": "Not supported on this OS",
+      "playLabel": "Play",
+      "play": "Play",
+      "playTooltip": "Switches OBS to this game's scene and starts the game. Its saved hook, OCR mode and overlay, plus Anki and the reading session, then start by themselves.",
+      "chooseGameFile": "Set game file…",
+      "chooseGameFileTooltip": "Choose the game's program file. Games in a Steam library start through Steam.",
+      "playViaSteam": "Starts through Steam (app {appId})",
+      "playViaFile": "Starts {file}",
+      "playUnknown": "Play becomes available after the game has run once with GSM, or set its game file.",
+      "playStarted": "Starting…",
+      "playFailed": "Could not start the game: {error}"
     },
     "rename": {
       "title": "Rename Game Capture",

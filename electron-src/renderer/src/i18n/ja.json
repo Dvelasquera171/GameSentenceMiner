@@ -77,7 +77,17 @@
       "sectionWindows": "ウィンドウ / ゲーム",
       "sectionCaptureCards": "キャプチャカード / カメラ",
       "notSupportedOS": "このOSではOBSでゲームキャプチャを設定してください。",
-      "notSupportedTooltip": "このOSでは未対応です"
+      "notSupportedTooltip": "このOSでは未対応です",
+      "playLabel": "プレイ",
+      "play": "プレイ",
+      "playTooltip": "OBSをこのゲームのシーンに切り替えてゲームを起動します。保存したフック、OCRモード、オーバーレイ、Anki、読書セッションは自動で始まります。",
+      "chooseGameFile": "ゲームファイルを設定…",
+      "chooseGameFileTooltip": "ゲームの実行ファイルを選びます。Steamライブラリ内のゲームはSteam経由で起動します。",
+      "playViaSteam": "Steam経由で起動（アプリ {appId}）",
+      "playViaFile": "{file} を起動",
+      "playUnknown": "GSMと一緒に一度ゲームを起動するか、ゲームファイルを設定するとプレイできるようになります。",
+      "playStarted": "起動中…",
+      "playFailed": "ゲームを起動できませんでした：{error}"
     },
     "rename": {
       "title": "ゲームキャプチャ名を変更",

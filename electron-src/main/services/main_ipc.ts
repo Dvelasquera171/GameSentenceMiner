@@ -8,6 +8,7 @@ import { registerFrontPageIPC } from '../ui/front.js';
 import { registerOCRUtilsIPC } from '../ui/ocr.js';
 import { registerSettingsIPC } from '../ui/settings.js';
 import { registerSteamIPC } from '../ui/steam.js';
+import { registerGameLaunchIPC } from '../ui/game_launch.js';
 import { registerOBSIPC } from '../ui/obs.js';
 import { registerAnkiBeaconIPC } from '../ui/anki_beacon.js';
 import { registerYuzuIPC } from '../ui/yuzu.js';
@@ -101,6 +102,7 @@ export function registerMainIPC(deps: MainIPCDependencies): void {
     registerYuzuIPC();
     registerOBSIPC();
     registerSteamIPC();
+    registerGameLaunchIPC();
     registerSettingsIPC({
         getUpdateStatus: deps.getUpdateStatus,
         checkForUpdates: deps.checkForUpdates,

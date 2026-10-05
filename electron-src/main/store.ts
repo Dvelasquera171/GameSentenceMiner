@@ -186,6 +186,7 @@ interface StoreConfig {
     startReadingSessionWithGame: boolean; // Start/end a Session Review reading session with the game
     launchAnkiWithGame: boolean; // Start Anki when a game becomes active
     ankiPath: string; // anki.exe; empty = standard install locations
+    gameLaunchTargets: Record<string, { path: string; steamAppId?: string }>; // by OBS scene id: how Play starts the game
     quitOnWindowClose: boolean; // Whether the main window X button quits instead of hiding to tray
     textCaptureWizardEnabled: boolean; // Whether to show the text capture wizard after capture setup
     obsOcrScenes: string[];
@@ -334,6 +335,7 @@ export const store = new Store<StoreConfig>({
         startReadingSessionWithGame: true,
         launchAnkiWithGame: true,
         ankiPath: '',
+        gameLaunchTargets: {},
         quitOnWindowClose: false,
         textCaptureWizardEnabled: true,
         obsOcrScenes: [],
@@ -907,6 +909,18 @@ export function getAnkiPath(): string {
 
 export function setAnkiPath(ankiPath: string): void {
     store.set("ankiPath", ankiPath.trim());
+}
+
+export function getGameLaunchTarget(sceneId: string): { path: string; steamAppId?: string } | null {
+    const target = (store.get("gameLaunchTargets", {}) || {})[sceneId];
+    return target && typeof target.path === "string" && target.path ? target : null;
+}
+
+export function setGameLaunchTarget(sceneId: string, target: { path: string; steamAppId?: string } | null): void {
+    const targets = { ...(store.get("gameLaunchTargets", {}) || {}) };
+    if (target) targets[sceneId] = target;
+    else delete targets[sceneId];
+    store.set("gameLaunchTargets", targets);
 }
 
 export function getQuitOnWindowClose(): boolean {

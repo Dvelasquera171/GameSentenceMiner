@@ -320,6 +320,9 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
   const [runOverlayWithActiveGame, setRunOverlayWithActiveGame] = useState(false);
   const [startReadingSessionWithGame, setStartReadingSessionWithGame] = useState(true);
   const [launchAnkiWithGame, setLaunchAnkiWithGame] = useState(true);
+  const [launchTarget, setLaunchTarget] = useState<{ path: string; steamAppId?: string } | null>(null);
+  const [playBusy, setPlayBusy] = useState(false);
+  const [playStatus, setPlayStatus] = useState<string | null>(null);
   const [overlaySettingsSaving, setOverlaySettingsSaving] = useState(false);
   const [overlaySettingsLoaded, setOverlaySettingsLoaded] = useState(false);
   const [overlaySettingsError, setOverlaySettingsError] = useState(false);
@@ -729,6 +732,49 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
     }
   }, [selectedSceneId, selectedSceneCaptureMode, refreshAll]);
 
+  // Play: GSM learns how to start a game the first time it runs (or from "Set game file").
+  useEffect(() => {
+    if (!active || !selectedSceneId) {
+      setLaunchTarget(null);
+      return;
+    }
+    let cancelled = false;
+    const load = () => invokeIpc<{ path: string; steamAppId?: string } | null>("game.getLaunchTarget", selectedSceneId)
+      .then((target) => { if (!cancelled) setLaunchTarget(target ?? null); })
+      .catch(() => { if (!cancelled) setLaunchTarget(null); });
+    setPlayStatus(null);
+    void load();
+    const timer = setInterval(() => void load(), 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [active, selectedSceneId]);
+
+  const handlePlay = useCallback(async () => {
+    if (!selectedScene) return;
+    setPlayBusy(true);
+    setPlayStatus(null);
+    try {
+      const result = await invokeIpc<{ success: boolean; error?: string }>(
+        "game.play", { id: selectedScene.id, name: selectedScene.name },
+      );
+      setPlayStatus(result?.success ? t("home.obs.playStarted") : t("home.obs.playFailed", { error: result?.error ?? "" }));
+    } catch (error) {
+      setPlayStatus(t("home.obs.playFailed", { error: String(error) }));
+    } finally {
+      setPlayBusy(false);
+    }
+  }, [selectedScene, t]);
+
+  const handleChooseGameFile = useCallback(async () => {
+    if (!selectedScene) return;
+    const target = await invokeIpc<{ path: string; steamAppId?: string } | null>(
+      "game.chooseLaunchFile", { id: selectedScene.id, name: selectedScene.name },
+    );
+    setLaunchTarget(target ?? null);
+  }, [selectedScene]);
+
   const handleOpenCaptureWizard = useCallback(() => {
     if (!selectedScene || isHelperScene) return;
     setCaptureWizardScene(selectedScene);
@@ -1041,6 +1087,40 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
                 </div>
               )}
 
+
+              {/* Play: start the game with its saved setup (hook, OCR mode, overlay, Anki, session) */}
+              {selectedScene && !isHelperScene && (
+                <div className="home-row">
+                  <span className="home-row__label">{t("home.obs.playLabel")}</span>
+                  <div className="home-row__controls home-capture-actions">
+                    <button
+                      type="button"
+                      className="home-overlay-primary-btn"
+                      disabled={!launchTarget || playBusy}
+                      onClick={() => void handlePlay()}
+                      data-tip={t("home.obs.playTooltip")}
+                    >
+                      {"▶ "}{t("home.obs.play")}
+                    </button>
+                    <button
+                      type="button"
+                      className="home-text-btn"
+                      onClick={() => void handleChooseGameFile()}
+                      data-tip={t("home.obs.chooseGameFileTooltip")}
+                    >
+                      {t("home.obs.chooseGameFile")}
+                    </button>
+                    <span style={{ opacity: 0.75, fontSize: "0.9em" }}>
+                      {launchTarget
+                        ? launchTarget.steamAppId
+                          ? t("home.obs.playViaSteam", { appId: launchTarget.steamAppId })
+                          : t("home.obs.playViaFile", { file: launchTarget.path.split(/[\\/]/).pop() ?? launchTarget.path })
+                        : t("home.obs.playUnknown")}
+                      {playStatus ? ` — ${playStatus}` : ""}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Scene actions */}
               <div className="home-row">

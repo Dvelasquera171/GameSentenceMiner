@@ -32,7 +32,8 @@ import {
     upsertSceneLaunchProfile
 } from './store.js';
 import type { SceneLaunchProfile, SceneOcrMode, SceneTextHookMode } from './store.js';
-import { getAnkiPath, getLaunchAnkiWithGame, getStartReadingSessionWithGame } from './store.js';
+import { getAnkiPath, getGameLaunchTarget, getLaunchAnkiWithGame, getStartReadingSessionWithGame, setGameLaunchTarget } from './store.js';
+import { resolveLaunchTarget } from './game_launch.js';
 import { exec, execFile, ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -615,7 +616,9 @@ export class AutoLauncher {
             const scene = await this.resolveCurrentScene();
             if (generation === this.pollingGeneration) await this.runOverlayAutomation(scene);
             if (generation === this.pollingGeneration) {
-                await gameSessionAutomation.update(scene?.name ?? null, scene ? activeGame.get(scene.name) : null);
+                const gameActive = scene ? activeGame.get(scene.name) : null;
+                await gameSessionAutomation.update(scene?.name ?? null, gameActive);
+                if (scene && gameActive === true) void this.learnLaunchTarget(scene);
             }
         } catch (error) {
             this.errorInternal('[AutoLauncher:Overlay] poll error:', error);
@@ -705,6 +708,28 @@ export class AutoLauncher {
                 resolve(!error && stdout.trim().length > 0);
             });
         });
+    }
+
+    // Remember how to start a running game so the Home tab's Play button can launch it next time.
+    private launchTargetAttempts = new Set<string>();
+
+    private async learnLaunchTarget(scene: ObsScene): Promise<void> {
+        if (!scene.id || this.launchTargetAttempts.has(scene.id) || getGameLaunchTarget(scene.id)) return;
+        this.launchTargetAttempts.add(scene.id);
+        try {
+            const exeName = await getExecutableNameFromSource(scene.id);
+            if (!exeName) return;
+            const pid = await this.getPidByProcessName(exeName);
+            const exePath = pid > 0 ? await this.getProcessExecutablePath(pid) : null;
+            if (!exePath) return;
+            const target = resolveLaunchTarget(exePath, fs);
+            setGameLaunchTarget(scene.id, target);
+            this.logInternal(
+                `AutoLauncher: Play for "${scene.name}" will start ${target.steamAppId ? `Steam app ${target.steamAppId}` : exePath}.`
+            );
+        } catch (error) {
+            this.errorInternal('[AutoLauncher] Could not learn how to start the game:', error);
+        }
     }
 
     private async getProcessExecutablePath(pid: number): Promise<string | null> {

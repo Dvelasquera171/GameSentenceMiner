@@ -53,6 +53,7 @@ describe("HowGsmWorks", () => {
     expect(text).toContain("Hook or OCR?");
     expect(text).toContain("Reading sessions");
     expect(text).toContain("Num8");
+    expect(text).toContain("GSM Connect");
     expect(container.querySelector("details")?.open).toBe(true);
   });
 

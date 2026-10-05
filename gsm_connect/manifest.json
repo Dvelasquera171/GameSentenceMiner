@@ -1,0 +1,35 @@
+{
+  "manifest_version": 3,
+  "name": "GSM Connect",
+  "version": "0.1.0",
+  "description": "Sends the subtitles and manga text you read in the browser (YouTube, asbplayer, Manatan, mokuro) to GameSentenceMiner.",
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "action": {
+    "default_title": "GSM Connect",
+    "default_popup": "src/popup.html",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png" }
+  },
+  "background": {
+    "service_worker": "src/background_sw.js",
+    "scripts": ["src/core.js", "src/background.js"]
+  },
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/core.js", "src/content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "commands": {
+    "ask-ai": {
+      "suggested_key": { "default": "Alt+Shift+A" },
+      "description": "Ask GSM's AI about the current line"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": { "id": "gsm-connect@gamesentenceminer", "strict_min_version": "121.0" }
+  }
+}

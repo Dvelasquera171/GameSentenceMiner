@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GSM Connect</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <img src="../icons/48.png" alt="" width="20" height="20" />
+    <h1>GSM Connect</h1>
+    <span id="status" class="status" role="status"></span>
+  </header>
+
+  <section id="tab-section">
+    <h2>This tab</h2>
+    <p id="tab-source" class="muted"></p>
+    <form id="title-form" hidden>
+      <label for="title">Filed in GSM as</label>
+      <div class="row">
+        <input id="title" type="text" autocomplete="off" />
+        <button type="submit">Save</button>
+      </div>
+      <p class="hint">Lines from this video or series go under this title: its own sessions, stats and review.</p>
+    </form>
+    <p id="last-line" class="last-line" hidden></p>
+    <label class="check" id="host-toggle" hidden>
+      <input id="host-enabled" type="checkbox" />
+      <span>Send lines from <strong id="host-name"></strong></span>
+    </label>
+  </section>
+
+  <section class="actions">
+    <button id="ask-ai" type="button" title="Opens GSM's Ask AI with the newest line (shortcut: Alt+Shift+A)">Ask AI about this line</button>
+    <button id="open-log" type="button" class="secondary">Text log</button>
+    <button id="open-review" type="button" class="secondary">Review</button>
+  </section>
+
+  <section>
+    <label class="check">
+      <input id="paused" type="checkbox" />
+      <span>Pause everywhere</span>
+    </label>
+    <details>
+      <summary>Help and settings</summary>
+      <ul class="help">
+        <li><strong>YouTube:</strong> turn on Japanese captions (CC).</li>
+        <li><strong>Anime:</strong> load subtitles in asbplayer or Manatan. With two subtitle files in asbplayer, the first one is sent.</li>
+        <li><strong>Manga:</strong> read in Manatan (or a mokuro page); each bubble is sent once when its page is on screen.</li>
+        <li>GSM does not have to be running: lines wait here and arrive with their original times when GSM starts.</li>
+        <li>Cards you make in the browser keep the browser's audio and picture; GSM adds nothing from OBS.</li>
+      </ul>
+      <label class="setting" for="port">GSM port <input id="port" type="number" min="1" max="65535" /></label>
+      <label class="setting" for="track">asbplayer subtitle
+        <select id="track">
+          <option value="0">first file</option>
+          <option value="1">second file</option>
+          <option value="all">all files</option>
+        </select>
+      </label>
+    </details>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -370,3 +370,11 @@ def test_inhouse_source_mode_is_recorded_and_cleared(monkeypatch):
     assert setup_check_api._inhouse_sources() == ({"ocr": True}, {"ocr": "manual"})
     gametext.set_inhouse_source_active("ocr", False)
     assert setup_check_api._inhouse_sources() == ({"ocr": False}, {"ocr": ""})
+
+
+def test_browser_connect_row_explains_itself_until_lines_arrive():
+    idle = setup_check_api.check_browser_connect(None)
+    assert idle.status == setup_check_api.STATUS_SKIP and "gsm_connect" in idle.fix
+    seen = setup_check_api.check_browser_connect({"at": 1000.0, "title": "Frieren", "site": "asbplayer"}, now=1060.0)
+    assert seen.status == setup_check_api.STATUS_OK
+    assert seen.detail == "Last line 60 s ago from asbplayer: Frieren."

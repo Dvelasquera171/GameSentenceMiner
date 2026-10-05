@@ -88,6 +88,7 @@ export function HowGsmWorks() {
                 </li>
               ))}
             </ul>
+            <p className="home-guide__note">{t("home.guide.connectBody")}</p>
           </section>
         </div>
         <section>

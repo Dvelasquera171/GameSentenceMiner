@@ -19,7 +19,7 @@ Yomitan in `%APPDATA%\gsm_overlay`.
 | Y | One Yomitan: overlay syncs from the Firefox export | medium | local agent |
 | Q | Extend texthooker AI help (follow-ups, wider context) | small | local agent |
 | A/B/C | Finish Session Review (page, session buttons, prompt tuning) | medium | local agent, see SESSION_REVIEW.md |
-| D | Non-game sources (anime, manga) | small + research | local agent |
+| D | Non-game sources (anime, manga, YouTube): GSM Connect | done | local agent |
 | F | Deploy to a second PC with few clicks | small | jp-mining-tools scripts |
 | H | One-click session start from the GSM Home tab | small | local agent, after E |
 
@@ -173,18 +173,21 @@ Unchanged; see [SESSION_REVIEW.md](SESSION_REVIEW.md). It runs after E, Y and Q.
 **Review side: done.** Everything in Session Review keys on `game_lines` rows grouped by
 `game_id` or `game_name`; the source does not matter.
 
-**Ingest side: 0 of 3.**
-1. *Title override* (not started). Lines are named after the OBS scene / foreground window, so
-   subtitle or manga text would be filed under whatever GSM thinks the current game is. Needs a
-   "current title" setting that `gametext.py` uses for `game_name` when set, plus an input on
-   the texthooker. Small.
-2. *asbplayer* (not verified). Unknown whether its websocket integration can emit subtitle text
-   outward; if not, a tiny bridge (subtitle file + player position → websocket on a port GSM
-   already listens to) is the fallback. One hour of research before any code.
-3. *manatan / manga OCR* (not verified). If it writes the clipboard, GSM's clipboard source
-   already ingests it and only item 1 is needed.
+**Ingest side: done (2026-10-05) with GSM Connect**, a small browser extension in `gsm_connect/`
+(see its README). Research first:
+1. *asbplayer* only accepts commands over its websocket (mine, load, seek, get-subtitles); it
+   never pushes the current line. Its only outbound path is "auto-copy to clipboard", which needs
+   page focus and takes over the clipboard. So the extension reads the subtitle on screen instead
+   (`span[data-asb-subtitle-index]` outside its subtitle list, first track by default).
+2. *Manatan* (manga OCR + anime player, a local web app on `127.0.0.1:4568`) renders manga text
+   as `.gemini-ocr-text-box` per page and anime subtitles as `[data-subtitle-cue]`; the extension
+   reads both. mokuro HTML pages too.
+3. *YouTube*: the captions on screen (`.ytp-caption-segment`); no caption download.
 
-Nothing anime- or manga-specific should go into GSM; only item 1 is GSM code.
+GSM side: `POST /api/connect/lines` (`web/connect_api.py`), source kind `browser`, each line filed
+under its own title (`metadata.scene` → `game_name`), so the title override is per line rather
+than a global setting. Cards mined from browser lines keep the browser's media (no OBS). The
+extension queues lines while GSM is closed. No anime-specific code in GSM beyond the source kind.
 
 ---
 

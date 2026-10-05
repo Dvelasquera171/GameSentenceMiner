@@ -190,6 +190,7 @@
       "pageStatsDescription": "Reading time, characters and speed per game.",
       "pageSetup": "Setup check",
       "pageSetupDescription": "Checks Anki, OBS, AI and the text source in one list.",
+      "connectBody": "Watching YouTube or anime, or reading manga in the browser? The GSM Connect extension (gsm_connect folder) sends those subtitles and speech bubbles here, each under its own title, even when GSM was closed at the time.",
       "sessionsTitle": "Reading sessions",
       "sessionsAuto": "Automatic: GSM splits each game's lines into sessions by itself. A pause of more than 30 minutes starts a new one (change it in the Stats page settings).",
       "sessionsManual": "Start/End: marks exactly when you read. Every line between Start and End belongs to that session, whatever the pauses. Lines outside it still form automatic sessions.",

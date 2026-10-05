@@ -340,7 +340,39 @@ its next start. New route: `POST /api/review/sessions/toggle` (adds no table).
 GSM settings window: Qt calls keypad 3 "Num+3"; the hotkey fields convert to and from `num3`, so
 opening settings no longer saves numpad hotkeys as empty, and pressing a numpad key records it.
 
+## 2026-10-05: D. Anime, manga and YouTube (GSM Connect)
+
+A browser extension (`gsm_connect/`, Chrome/Edge/Firefox, no build step) sends what is read in the
+browser to GSM; GSM files each line under its own title. See `gsm_connect/README.md`.
+
+| What | Commit |
+|---|---|
+| GSM: `POST /api/connect/lines`, source kind `browser`, per-line title, no OBS media on browser cards, burst-safe, Ask AI titled by the newest line | `a586732e` |
+| Extension + setup-check row + Home card mention | (this commit) |
+
+- **Reads:** asbplayer subtitles (any site and its own player; first track), YouTube captions,
+  Manatan anime subtitles and manga text boxes, Netflix captions, `<video>` subtitle tracks, mokuro
+  pages. Furigana is dropped; manga columns are joined into one line per bubble.
+- **Titles:** YouTube video title; anime/manga series (episode/chapter numbers dropped), editable
+  in the popup per video/episode.
+- **Offline:** lines wait in the extension (up to 5000) and arrive with their original times.
+- **Ask AI:** popup button or Alt+Shift+A opens GSM's Ask AI window with the newest line.
+- **Checked:** unit tests (Python, extension) and an end-to-end run in headless Edge against a fake
+  GSM (asbplayer lines, background-tab timing, manga pages, titles). Not yet tried on the real
+  YouTube / asbplayer / Manatan sites.
+
+### Owner test (GSM Connect, about 10 minutes)
+1. Load `gsm_connect` as an extension (README: Chrome/Edge unpacked, or Firefox temporary add-on).
+2. YouTube: a Japanese video with Japanese CC on. The popup says "Reading YouTube captions"; the
+   badge counts down to nothing while GSM runs. GSM text log shows the lines.
+3. Anime in asbplayer (or Manatan): popup title should be the series without the episode number.
+4. Manga in Manatan: each bubble appears once in the text log as you turn pages.
+5. Close GSM, watch a minute (badge counts up, amber), start GSM: the lines arrive.
+6. `localhost:55000/review`: the video/series has its own sessions; Generate review works.
+7. Mine a word with Yomitan on the video: GSM must not add a game screenshot or audio to it.
+
 ### Still open (next)
+- Owner test of GSM Connect (steps above); Firefox permanent install needs one signing step (README).
 - Owner test of today's changes (steps above).
 - Trails in the Sky: the OCR-all-the-time path (wizard "can't be hooked").
 - The 5-minute overlay relaunch block: check `logs/overlay.log` next time it happens.

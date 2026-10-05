@@ -193,6 +193,26 @@ def _format_age(seconds: int) -> str:
     return f"{seconds // 86400} days"
 
 
+def check_browser_connect(last: dict | None, now: float | None = None) -> Check:
+    """GSM Connect: subtitles and manga text from the browser, filed under their own titles."""
+    title = "Browser (GSM Connect)"
+    if not last:
+        return Check(
+            "browser_connect",
+            title,
+            STATUS_SKIP,
+            "No browser lines since GSM started. Only needed for YouTube, anime or manga in the browser.",
+            "Load the gsm_connect folder as a browser extension (see gsm_connect/README.md).",
+        )
+    age = max(0, int((now or time.time()) - float(last.get("at") or 0)))
+    return Check(
+        "browser_connect",
+        title,
+        STATUS_OK,
+        f"Last line {_format_age(age)} ago from {last.get('site') or 'the browser'}: {last.get('title') or 'untitled'}.",
+    )
+
+
 def check_texthooker(config) -> Check:
     general = config.general
     main_url = f"http://localhost:{general.single_port}/texthooker"
@@ -532,12 +552,18 @@ def run_checks(
     ai_tester: Callable | None = None,
     extra_checks: list[Callable[[], list[Check]]] | None = None,
     inhouse: tuple[dict, dict] | None = None,
+    connect_last: dict | None = None,
 ) -> dict:
     config = config or get_config()
     status = status if status is not None else gsm_status.to_dict()
     checks: list[Check] = []
     checks.extend(check_text_sources(config, status, inhouse))
     checks.append(check_texthooker(config))
+    if connect_last is None:
+        from GameSentenceMiner.web.connect_api import last_activity
+
+        connect_last = last_activity()
+    checks.append(check_browser_connect(connect_last))
     checks.extend(check_anki(config, anki_call))
     checks.append(check_ai_configured(config))
     checks.append(check_ai_reachable(config, run_ai_test, ai_tester))

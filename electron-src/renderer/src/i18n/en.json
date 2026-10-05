@@ -313,15 +313,34 @@
   },
   "captureWizard": {
     "title": "Text Capture Wizard",
-    "subtitle": "Learn your text capture options in four steps, or jump to the setting you need.",
+    "subtitle": "Answer one question, then check the capture and the text source. You can jump to any step.",
     "breadcrumbLabel": "Text capture setup steps",
     "steps": {
+      "kind": "Game",
       "preview": "Capture",
       "agent": "Agent",
       "hook": "Texthook",
       "ocr": "OCR",
       "profile": "Profile",
       "finish": "Finalize"
+    },
+    "kind": {
+      "title": "What kind of game is it?",
+      "description": "Your answer decides how GSM gets the game's text. You can change it later by running this wizard again.",
+      "vn": "Visual novel on PC",
+      "vnDescription": "Recommended: a text hook reads the text straight from the game, exact and instant. OCR stays on a key (Num1, Num2) for pictures and extra text boxes.",
+      "emulator": "Console game in an emulator",
+      "emulatorDescription": "Switch, PS Vita, PSP and similar. An Agent script made for the game reads its text. OCR stays on a key for anything else.",
+      "ocr": "A game that can't be hooked",
+      "ocrDescription": "Many 3D games and RPGs. OCR reads the text box on screen all the time. Next you draw a box around the dialogue.",
+      "unsure": "Not sure",
+      "unsureDescription": "Try a hook first. If no captured line matches the dialogue, the wizard offers OCR instead.",
+      "next": "Next: check the capture",
+      "explainTitle": "Hook or OCR?",
+      "explainHook": "Hook: reads the text from the game itself. Exact text, no misreads. Works with most PC visual novels, or with an Agent script for emulators.",
+      "explainOcr": "OCR: reads the text from the screen picture. Works with any game, but can misread characters and needs a box around the dialogue.",
+      "explainBoth": "Both together: the hook handles the dialogue; OCR on demand (Num1: dialogue area, Num2: draw a box) catches pictures and menus. GSM drops a line it already has from the other source.",
+      "emulatorHint": "For an emulator, use the Agent script below. Luna and Textractor are for PC games."
     },
     "actions": {
       "deny": "Not now",
@@ -460,6 +479,7 @@
     },
     "guided": {
       "captureNext": "Capture looks right — choose text",
+      "captureNextOcr": "Capture looks right — set up OCR",
       "hookNext": "Next: OCR for pictures and extra boxes",
       "finalize": "Continue to Finalize",
       "saveAndClose": "Save and close",

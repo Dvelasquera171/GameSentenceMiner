@@ -147,6 +147,7 @@ describe("TextCaptureWizard", () => {
       );
       await flushAsyncWork();
     });
+    await clickButton(container, "Next: check the capture");
 
     const switchButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent === "Switch to Game Capture",
@@ -164,7 +165,7 @@ describe("TextCaptureWizard", () => {
     });
   });
 
-  it("guides users through four steps and saves from the final footer", async () => {
+  it("asks for the kind of game first, then guides through the steps and saves from the final footer", async () => {
     const scene = { id: "scene-1", name: "Example Game" };
     const onClose = vi.fn();
     invokeMock.mockImplementation(async (channel: string) => {
@@ -185,10 +186,13 @@ describe("TextCaptureWizard", () => {
     });
 
     const crumbs = Array.from(container.querySelectorAll(".capture-wizard-crumb"));
-    expect(crumbs).toHaveLength(4);
+    expect(crumbs).toHaveLength(5);
     expect(crumbs.map((button) => button.textContent?.replace(/^\d\s*/, "").trim())).toEqual([
-      "Capture", "Texthook", "OCR", "Finalize",
+      "Game", "Capture", "Texthook", "OCR", "Finalize",
     ]);
+    expect(container.textContent).toContain("What kind of game is it?");
+    expect(container.textContent).toContain("Hook or OCR?");
+    await clickButton(container, "Not sure");
     expect(findButton(container, "Capture looks right — choose text")).toBeInstanceOf(HTMLButtonElement);
 
     await clickButton(container, "Capture looks right — choose text");
@@ -490,6 +494,46 @@ describe("TextCaptureWizard", () => {
       "最初の会話サンプル",
     );
     expect(container.textContent).not.toContain("Smaller areas avoid menus");
+  });
+
+  it("skips the Texthook step for a game that can't be hooked and saves continuous OCR", async () => {
+    const scene = { id: "scene-1", name: "Example Game" };
+    mockSceneContext();
+    await renderWizard();
+
+    await clickButton(container, "A game that can't be hooked");
+    await clickButton(container, "Capture looks right — set up OCR");
+    // Straight to OCR, with continuous OCR preselected.
+    expect(container.textContent).not.toContain("Get text directly from the game");
+    expect(findButton(container, "Use OCR and finalize")).toBeInstanceOf(HTMLButtonElement);
+    const autoOcr = container.querySelector<HTMLInputElement>(
+      'input[name="capture-wizard-ocr-automation"][value="auto"]',
+    );
+    expect(autoOcr?.checked).toBe(true);
+
+    await clickButton(container, "Back");
+    expect(findButton(container, "Capture looks right — set up OCR")).toBeInstanceOf(HTMLButtonElement);
+    await clickButton(container, "Capture looks right — set up OCR");
+    await clickButton(container, "Use OCR and finalize");
+    await clickButton(container, "Save and close");
+
+    expect(invokeMock).toHaveBeenCalledWith("settings.saveSceneLaunchProfile", expect.objectContaining({
+      scene,
+      textHookMode: "none",
+      ocrMode: "auto",
+    }));
+  });
+
+  it("undoes the OCR-only choice when the kind of game is changed to a visual novel", async () => {
+    mockSceneContext();
+    await renderWizard();
+
+    await clickButton(container, "A game that can't be hooked");
+    await clickButton(container, "Game");
+    await clickButton(container, "Visual novel on PC");
+    // Back on the hook path: the next step is the Texthook step, not OCR.
+    await clickButton(container, "Capture looks right — choose text");
+    expect(findButton(container, "This game can't be hooked: use OCR")).toBeInstanceOf(HTMLButtonElement);
   });
 
   it("saves the selected automatic OCR startup mode for the game", async () => {

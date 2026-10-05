@@ -12,7 +12,8 @@ import {
 } from "../../../shared/agent_scripts";
 
 type TextHookEngine = "luna" | "textractor" | "agent";
-type WizardStep = "preview" | "hook" | "ocr" | "finish";
+type WizardStep = "kind" | "preview" | "hook" | "ocr" | "finish";
+type GameKind = "vn" | "emulator" | "ocr" | "unsure";
 type WizardTextSource = "none" | TextHookEngine | "ocr";
 type OcrInitialScanState =
   | "idle"
@@ -107,10 +108,19 @@ interface SavedHookProfile {
 }
 
 const CAPTURE_WIZARD_STEPS: Array<{ id: WizardStep; labelKey: string }> = [
+  { id: "kind", labelKey: "captureWizard.steps.kind" },
   { id: "preview", labelKey: "captureWizard.steps.preview" },
   { id: "hook", labelKey: "captureWizard.steps.hook" },
   { id: "ocr", labelKey: "captureWizard.steps.ocr" },
   { id: "finish", labelKey: "captureWizard.steps.finish" }
+];
+
+// First question: the kind of game decides between a hook (with OCR on demand) and OCR only.
+const GAME_KIND_OPTIONS: Array<{ value: GameKind; labelKey: string; descriptionKey: string }> = [
+  { value: "vn", labelKey: "captureWizard.kind.vn", descriptionKey: "captureWizard.kind.vnDescription" },
+  { value: "emulator", labelKey: "captureWizard.kind.emulator", descriptionKey: "captureWizard.kind.emulatorDescription" },
+  { value: "ocr", labelKey: "captureWizard.kind.ocr", descriptionKey: "captureWizard.kind.ocrDescription" },
+  { value: "unsure", labelKey: "captureWizard.kind.unsure", descriptionKey: "captureWizard.kind.unsureDescription" }
 ];
 
 const OCR_AUTOMATION_OPTIONS: Array<{
@@ -180,7 +190,8 @@ export function TextCaptureWizard({
   onClose,
 }: TextCaptureWizardProps) {
   const t = useTranslation();
-  const [step, setStep] = useState<WizardStep>("preview");
+  const [step, setStep] = useState<WizardStep>("kind");
+  const [gameKind, setGameKind] = useState<GameKind | null>(null);
   const [scene, setScene] = useState<ObsScene | null>(initialScene ?? null);
   const [capture, setCapture] = useState<ActiveCapture | null>(null);
   const [preview, setPreview] = useState<ObsScenePreviewSnapshot | null>(null);
@@ -379,7 +390,13 @@ export function TextCaptureWizard({
   }, [activeScene?.id, t]);
 
   useEffect(() => {
-    if (step !== "preview" || !activeScene?.id) return undefined;
+    if (!activeScene?.id) return undefined;
+    // One frame during the first question, so the Capture step opens with a picture.
+    if (step === "kind") {
+      void refreshPreview();
+      return undefined;
+    }
+    if (step !== "preview") return undefined;
     setPreviewLoading(true);
     void refreshPreview();
     const interval = window.setInterval(() => {
@@ -895,10 +912,39 @@ export function TextCaptureWizard({
     }
   }, [activeScene?.name, newProfileName, selectedProfile, t]);
 
+  // A game that can't be hooked skips the Texthook step in both directions.
+  const nextStepId = (current: WizardStep): WizardStep => {
+    if (current === "preview" && gameKind === "ocr") return "ocr";
+    const index = CAPTURE_WIZARD_STEPS.findIndex((entry) => entry.id === current);
+    return CAPTURE_WIZARD_STEPS[Math.min(index + 1, CAPTURE_WIZARD_STEPS.length - 1)].id;
+  };
+
   const goBack = useCallback(() => {
     if (isFirstStep) return;
+    if (step === "ocr" && gameKind === "ocr") {
+      setStep("preview");
+      return;
+    }
     setStep(CAPTURE_WIZARD_STEPS[stepIndex - 1].id);
-  }, [isFirstStep, stepIndex]);
+  }, [gameKind, isFirstStep, step, stepIndex]);
+
+  const chooseGameKind = useCallback((kind: GameKind) => {
+    setStatusMessage(null);
+    if (kind === "ocr") {
+      setTextSource("ocr");
+      setTextSourceChanged(true);
+      setLaunchTextHook(false);
+      setOcrMode((current) => (current === "none" ? "auto" : current));
+    } else if (gameKind === "ocr" && textSource === "ocr") {
+      // Undo the OCR-only choice made a moment ago.
+      setTextSource("none");
+      setTextSourceChanged(false);
+      setLaunchTextHook(true);
+      setOcrMode((current) => (current === "auto" ? "none" : current));
+    }
+    setGameKind(kind);
+    setStep("preview");
+  }, [gameKind, textSource]);
 
   return (
     <div className="capture-wizard-overlay" role="dialog" aria-modal="true" aria-labelledby="capture-wizard-title">
@@ -931,6 +977,41 @@ export function TextCaptureWizard({
 
         <div className="capture-wizard-body">
           {contextFailed || statusMessage ? <div className="capture-wizard-note" role="status">{contextFailed ? t("captureWizard.errors.contextFailed") : statusMessage}</div> : null}
+          {step === "kind" ? (
+            <section className="capture-wizard-step-panel">
+              <div className="capture-wizard-copy">
+                <h3>{t("captureWizard.kind.title")}</h3>
+                <p>{t("captureWizard.kind.description")}</p>
+              </div>
+              <div className="capture-wizard-hook-list">
+                {GAME_KIND_OPTIONS.map((option) => {
+                  const selected = gameKind === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`capture-wizard-hook ${selected ? "capture-wizard-hook--selected" : ""}`}
+                      aria-pressed={selected}
+                      onClick={() => chooseGameKind(option.value)}
+                    >
+                      <span className="capture-wizard-choice-body">
+                        <strong>{t(option.labelKey)}</strong>
+                        <small>{t(option.descriptionKey)}</small>
+                      </span>
+                      <span className="capture-wizard-choice-check" aria-hidden="true">{selected ? "✓" : ""}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="capture-wizard-note">
+                <strong>{t("captureWizard.kind.explainTitle")}</strong>
+                <p>{t("captureWizard.kind.explainHook")}</p>
+                <p>{t("captureWizard.kind.explainOcr")}</p>
+                <p>{t("captureWizard.kind.explainBoth")}</p>
+              </div>
+            </section>
+          ) : null}
+
           {step === "preview" ? (
             <section className="capture-wizard-step-panel capture-wizard-step-panel--preview">
               <div className="capture-wizard-copy">
@@ -991,7 +1072,9 @@ export function TextCaptureWizard({
                 <h3>{t("captureWizard.hook.title")}</h3>
                 <p>{t("captureWizard.hook.description")}</p>
               </div>
-              <div className="capture-wizard-note">{t("captureWizard.guided.hookVsOcr")}</div>
+              <div className="capture-wizard-note">
+                {t(gameKind === "emulator" ? "captureWizard.kind.emulatorHint" : "captureWizard.guided.hookVsOcr")}
+              </div>
               <div className="capture-wizard-methods">
               <div className="capture-wizard-method">
                 <h4>{t("captureWizard.guided.vnTitle")}</h4>
@@ -1344,11 +1427,13 @@ export function TextCaptureWizard({
                     setTextSourceChanged(true);
                     setLaunchTextHook(false);
                   }
-                  setStep(CAPTURE_WIZARD_STEPS[stepIndex + 1].id);
+                  setStep(nextStepId(step));
                 }}
               >
-                {t(step === "preview"
-                  ? "captureWizard.guided.captureNext"
+                {t(step === "kind"
+                  ? "captureWizard.kind.next"
+                  : step === "preview"
+                  ? gameKind === "ocr" ? "captureWizard.guided.captureNextOcr" : "captureWizard.guided.captureNext"
                   : step === "hook"
                     ? hasTextHook
                       ? "captureWizard.guided.hookNext"

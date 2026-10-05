@@ -369,6 +369,7 @@ const OVERLAY_NON_PROFILE_SETTING_KEYS = new Set([
   "gamepadYomitanApiUrl",
   "dictionaryReaderSelection",
   "numpadHotkeysApplied",
+  "openSettingsOnStartupDefaultOff",
 ]);
 
 function getPackagedResourcesPath() {
@@ -1051,7 +1052,8 @@ const DEFAULT_USER_SETTINGS = Object.freeze({
   "weburl2": DEFAULT_ENFORCED_OVERLAY_WS_URL,
   "hideOverlayOnStartup": false,
   "hideOnStartup": true,
-  "openSettingsOnStartup": true,
+  "openSettingsOnStartup": false,
+  "openSettingsOnStartupDefaultOff": true,
   "focusOverlayOnYomitanLookup": false,
   "manualMode": false,
   "manualModeType": "hold",
@@ -4748,8 +4750,18 @@ if (hasPersistedOverlaySettings) {
       shouldPersistOverlaySettings = true;
     }
 
-    if (!Object.prototype.hasOwnProperty.call(oldUserSettings, "openSettingsOnStartup")) {
-      userSettings.openSettingsOnStartup = true;
+    // Settings used to open on every start and take focus from the game; now only on the first run.
+    if (oldUserSettings.openSettingsOnStartupDefaultOff !== true) {
+      userSettings.openSettingsOnStartup = false;
+      const startupProfiles = userSettings[OVERLAY_PROFILE_SETTINGS_KEY];
+      if (startupProfiles && typeof startupProfiles === "object") {
+        for (const profileSettings of Object.values(startupProfiles)) {
+          if (profileSettings && typeof profileSettings === "object" && "openSettingsOnStartup" in profileSettings) {
+            profileSettings.openSettingsOnStartup = false;
+          }
+        }
+      }
+      userSettings.openSettingsOnStartupDefaultOff = true;
       shouldPersistOverlaySettings = true;
     }
 
@@ -7985,7 +7997,7 @@ async function startOverlayAppImpl() {
 
     // Start the activity timer
     const settingsTab = process.argv.includes('--gsm-overlay-settings-tab=system') ? 'system' : undefined;
-    if (userSettings.openSettingsOnStartup || settingsTab) {
+    if (userSettings.openSettingsOnStartup || settingsTab || !hasPersistedOverlaySettings) {
       openSettings(settingsTab);
     }
     resetActivityTimer();

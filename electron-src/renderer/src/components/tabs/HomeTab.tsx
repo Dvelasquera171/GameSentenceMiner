@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invokeIpc } from "../../lib/ipc";
 import { useTranslation } from "../../i18n";
+import { HowGsmWorks } from "../HowGsmWorks";
 import { TextCaptureWizard } from "../TextCaptureWizard";
 import type { GsmStatus, ObsCaptureMode, ObsScene, ObsWindow } from "../../types/models";
 
@@ -1529,6 +1530,9 @@ export function HomeTab({ active, onNavigateTab }: HomeTabProps) {
               </button>
             </div>
           </section>
+
+          {/* ===== HOW GSM WORKS ===== */}
+          <HowGsmWorks />
 
           {/* ===== STATUS ===== */}
           <section className="card home-status-card">

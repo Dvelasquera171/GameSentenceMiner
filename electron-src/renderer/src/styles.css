@@ -8003,3 +8003,82 @@ button.danger:hover:not(:disabled) {
 .settings-data-folder-location summary {
   cursor: pointer;
 }
+
+/* ---- How GSM works (Home) ----------------------------------------- */
+
+.home-guide-card > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+
+.home-guide p,
+.home-guide li {
+  margin: 0;
+  color: var(--gsm-text-secondary, #c0c0c0);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.home-guide h4 {
+  margin: 0 0 6px;
+  color: var(--gsm-text-primary, #e0e0e0);
+  font-size: 0.9rem;
+}
+
+.home-guide section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.home-guide__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.home-guide__keys,
+.home-guide__pages,
+.home-guide__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.home-guide__list li {
+  padding-left: 12px;
+  border-left: 2px solid var(--gsm-surface-2, #3a3a3a);
+}
+
+.home-guide__keys li,
+.home-guide__pages li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.home-guide__keys kbd {
+  min-width: 44px;
+  padding: 1px 6px;
+  border: 1px solid var(--gsm-surface-2, #3a3a3a);
+  border-radius: 4px;
+  background: var(--gsm-surface-2, #2a2a2a);
+  color: var(--gsm-text-primary, #e0e0e0);
+  font-family: inherit;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.home-guide__pages .home-quick-btn {
+  flex: 0 0 auto;
+  min-width: 96px;
+  justify-content: center;
+}
+
+.home-guide__note {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}

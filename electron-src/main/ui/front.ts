@@ -27,6 +27,7 @@ import {
 import { getConfiguredYuzuGames, getYuzuGames } from './yuzu.js';
 import { getOBSConnection, getOBSScenes } from './obs.js';
 import { getSceneOCRConfig } from './ocr.js';
+import { GSM_WEB_PAGE_PATHS } from '../gsm_web_pages.js';
 import { sendOpenTexthooker, sendStopOverlay } from '../main.js';
 import { USE_IN_PROCESS_OVERLAY } from '../overlay_runtime_config.js';
 import { getWindowsSystemExecutable } from '../runtime/windows_tools.js';
@@ -131,6 +132,15 @@ export function registerFrontPageIPC() {
     ipcMain.handle('open-external-link', async (_, url: string) => {
         const { shell } = await import('electron');
         await shell.openExternal(url);
+    });
+
+    // GSM's own browser pages only; the renderer cannot open arbitrary URLs through this.
+    ipcMain.handle('openGsmWebPage', async (_, pagePath: string) => {
+        if (!GSM_WEB_PAGE_PATHS.has(pagePath)) return { success: false };
+        const { shell } = await import('electron');
+        const { getConfiguredSinglePort } = await import('../gsm_config.js');
+        await shell.openExternal(`http://localhost:${getConfiguredSinglePort()}${pagePath}`);
+        return { success: true };
     });
 
     ipcMain.handle('openTexthooker', async () => {

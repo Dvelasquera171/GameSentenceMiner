@@ -1605,6 +1605,22 @@ fn parse_manual_hotkey_key(token: &str) -> Result<KeyboardKey, String> {
         "PAGEUP" => KeyboardKey::PageUp,
         "PAGEDOWN" => KeyboardKey::PageDown,
         "INSERT" => KeyboardKey::Insert,
+        // Numpad keys with NumLock on (Electron accelerator names), distinct from the top-row digits.
+        "NUM0" => KeyboardKey::Kp0,
+        "NUM1" => KeyboardKey::Kp1,
+        "NUM2" => KeyboardKey::Kp2,
+        "NUM3" => KeyboardKey::Kp3,
+        "NUM4" => KeyboardKey::Kp4,
+        "NUM5" => KeyboardKey::Kp5,
+        "NUM6" => KeyboardKey::Kp6,
+        "NUM7" => KeyboardKey::Kp7,
+        "NUM8" => KeyboardKey::Kp8,
+        "NUM9" => KeyboardKey::Kp9,
+        "NUMADD" => KeyboardKey::KpPlus,
+        "NUMSUB" => KeyboardKey::KpMinus,
+        "NUMMULT" => KeyboardKey::KpMultiply,
+        "NUMDIV" => KeyboardKey::KpDivide,
+        "NUMDEC" => KeyboardKey::KpDelete,
         "F1" => KeyboardKey::F1,
         "F2" => KeyboardKey::F2,
         "F3" => KeyboardKey::F3,
@@ -4576,6 +4592,19 @@ mod tests {
         assert_eq!(f13, KeyboardKey::Unknown(124));
         let f24 = parse_manual_hotkey_key("f24").expect("F24 should parse");
         assert_eq!(f24, KeyboardKey::Unknown(135));
+    }
+
+    #[test]
+    fn numpad_keys_parse_to_keypad_keys() {
+        assert_eq!(parse_manual_hotkey_key("num0").unwrap(), KeyboardKey::Kp0);
+        assert_eq!(parse_manual_hotkey_key("Num8").unwrap(), KeyboardKey::Kp8);
+        assert_eq!(parse_manual_hotkey_key("numadd").unwrap(), KeyboardKey::KpPlus);
+        assert_eq!(parse_manual_hotkey_key("numsub").unwrap(), KeyboardKey::KpMinus);
+        assert_eq!(parse_manual_hotkey_key("nummult").unwrap(), KeyboardKey::KpMultiply);
+        assert_eq!(parse_manual_hotkey_key("numdiv").unwrap(), KeyboardKey::KpDivide);
+        assert_eq!(parse_manual_hotkey_key("numdec").unwrap(), KeyboardKey::KpDelete);
+        assert_ne!(parse_manual_hotkey_key("1").unwrap(), parse_manual_hotkey_key("num1").unwrap());
+        assert!(parse_manual_hotkey_binding("num0").is_ok());
     }
 
     #[test]

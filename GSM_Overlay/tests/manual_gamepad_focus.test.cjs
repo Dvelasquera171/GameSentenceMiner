@@ -88,6 +88,7 @@ function setup(t, settings = {}) {
     ensureManualAndTexthookerHotkeysDistinct: () => false,
     setOverlaySettingValue: (key, value) => { context.userSettings[key] = value; },
     safeUnregisterHotkey() {},
+    syncNumpadHotkeyClaim() {},
     setAppHotkey: (name, _key, handler) => { hotkeys.set(name, handler); return true; },
     getCurrentOverlayMonitor: () => ({}),
     getOverlayBoundsForDisplay: () => ({ x: 0, y: 0, width: 1920, height: 1080 }),

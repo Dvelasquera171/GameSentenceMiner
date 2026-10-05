@@ -39,6 +39,11 @@ const {
   shouldSuppressGamepadToggleDuringFocusTransition,
 } = require('./hotkey_settings');
 const {
+  createNumpadHotkeyGate,
+  isNumpadAccelerator,
+  shouldClaimNumpadHotkeys,
+} = require('./numpad_hotkey_gate');
+const {
   isEffectiveInputServerHotkeyRouting,
   isWaylandSession,
 } = require('./hotkey_routing');
@@ -1871,6 +1876,7 @@ function setTrackedGameWindowState(state, source = "unknown") {
   trackedGameWindowState = normalized;
   trackedGameWindowStateUpdatedAt = Date.now();
   if (changed) console.log(`[WindowState] Tracked game state -> ${normalized} (${source})`);
+  syncNumpadHotkeyClaim(`window-state:${source}`);
   return normalized;
 }
 
@@ -3353,6 +3359,28 @@ function syncManualHotkeyInputServerConnection(reason = "unknown") {
 // globalShortcut only understands keyboard accelerators.
 
 const appHotkeyGlobalShortcutAccelerators = new Map(); // id -> accelerator currently held by globalShortcut
+const numpadHotkeyGate = createNumpadHotkeyGate({
+  register: (accelerator, handler) => globalShortcut.register(accelerator, handler),
+  unregister: (accelerator) => globalShortcut.unregister(accelerator),
+  log: (message) => console.warn(message),
+});
+
+function isAnyOverlayWindowFocused() {
+  for (const win of overlayWindows) {
+    if (win && !win.isDestroyed() && win.isFocused()) return true;
+  }
+  return false;
+}
+
+function syncNumpadHotkeyClaim(reason = "unknown") {
+  const claim = shouldClaimNumpadHotkeys({
+    gameWindowState: trackedGameWindowState,
+    overlayWindowFocused: isAnyOverlayWindowFocused(),
+  });
+  if (numpadHotkeyGate.setClaimed(claim)) {
+    console.log(`[Hotkeys] Numpad hotkeys ${claim ? "held" : "released"} (${reason})`);
+  }
+}
 const TOGGLE_HOTKEY_COOLDOWN_MS = 250;
 
 function isRouteAllHotkeysEnabled() {
@@ -3573,6 +3601,12 @@ function setAppHotkey(id, accelerator, handler, options = {}) {
     return true;
   }
 
+  if (isNumpadAccelerator(accel)) {
+    numpadHotkeyGate.set(id, accel, effectiveHandler);
+    syncNumpadHotkeyClaim(`register:${id}`);
+    return true;
+  }
+
   const fallbackAccelerator = options.settingKey
     ? DEFAULT_USER_SETTINGS[options.settingKey]
     : accel;
@@ -3600,6 +3634,7 @@ function setAppHotkey(id, accelerator, handler, options = {}) {
 }
 
 function clearAppHotkey(id) {
+  numpadHotkeyGate.clear(id);
   const prevAccel = appHotkeyGlobalShortcutAccelerators.get(id);
   if (prevAccel) {
     try {
@@ -7636,9 +7671,13 @@ async function startOverlayAppImpl() {
   // (the register* calls above populated the registry).
   syncAppHotkeyInputServerConnection("app-whenReady");
 
+  registerOverlayEmitterListener(app, 'browser-window-focus', () => syncNumpadHotkeyClaim('window-focus'));
+  registerOverlayEmitterListener(app, 'browser-window-blur', () => syncNumpadHotkeyClaim('window-blur'));
+
   registerOverlayEmitterListener(app, 'will-quit', () => {
     releaseAllOverlayPauseRequests();
     globalShortcut.unregisterAll();
+    numpadHotkeyGate.reset();
     closeAppHotkeyInputServerConnection();
     stopOverlayWebSockets();
     void stopGamepadServer("app-will-quit");
@@ -9070,6 +9109,7 @@ async function stopOverlayApp() {
 
       runOverlayCleanupStep('global shortcuts', () => globalShortcut.unregisterAll());
       appHotkeyGlobalShortcutAccelerators.clear();
+      numpadHotkeyGate.reset();
       appHotkeyInputServerConnection.registry.clear();
       runOverlayCleanupStep('background tasks', () => bg.reset());
       runOverlayCleanupStep('pomodoro timer', () => clearPomodoroTicker());

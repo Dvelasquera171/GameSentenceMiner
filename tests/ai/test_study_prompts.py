@@ -192,3 +192,14 @@ def test_context_lines_override_and_whole_session(monkeypatch):
 
     service.analyze(lines, current.text, current, "Game", mode="sentence", context_lines=0)
     assert "No dialogue context available." in client.generate.call_args.args[0].prompt
+
+
+def test_custom_question_may_use_general_language_knowledge(monkeypatch):
+    # A name's reading is language knowledge, not a story fact; the model must not refuse it.
+    service, client = _service(monkeypatch)
+    line = _line(0, "「……ふぅ、これで荷物もあらかた届いたかな」", 0)
+    service.analyze([line], line.text, line, "Game", mode="custom", question="嘉祥はどう読む？")
+    prompt = client.generate.call_args.args[0].prompt
+    assert "general knowledge of the language for readings" in prompt
+    assert "using only the supplied dialogue" not in prompt
+    assert "story facts rely only on the supplied dialogue" in prompt

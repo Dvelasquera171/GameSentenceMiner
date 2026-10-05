@@ -289,6 +289,12 @@ continuous OCR by default; hotkeys should avoid Ctrl/Shift/Alt (numpad proposed)
 | Ask AI: custom questions may use general language knowledge (readings of names, grammar) | `7c3c1284` |
 | Home tab **Play**: starts a set-up game (OBS scene + its saved hook/OCR/overlay; Steam games via Steam) | `c4f3bd79` |
 | Numpad layout for GSM, OCR and overlay hotkeys (one-time migration); **Num8** starts/ends a reading session | `cf3b4147` |
+| GSM settings window keeps numpad hotkeys (Qt "Num+3" ↔ `num3`) | `c8f6ae6c` |
+| Overlay settings window opens on the first run only (existing installs switched off once) | `17a1d772` |
+| Overlay numpad keys held only while the game or an overlay window is in front | `241f3d98` |
+| Wizard asks "What kind of game is it?" first (VN / emulator / can't be hooked / not sure) | `5495ecb2` |
+| Home tab "How GSM works": app vs game vs browser pages, keys, hook vs OCR, sessions | `b5d201e0` |
+| Input server parses numpad keys ("route all hotkeys" mode); binary rebuilt | `0bf72cd7` |
 
 Data: all lines deleted on request (210 lines, 3 games); backup first at
 `%APPDATA%\GameSentenceMiner\backup\gsm_backup_20261004_151249.db`.
@@ -297,14 +303,17 @@ Overlay Yomitan: synced from the Firefox export (5 dictionaries, all 3 card form
 ### Owner test (VN, about 10 minutes)
 1. Start GSM only. Home tab: "Open and close with active game", "Start and end a reading session
    with the game" and "Start Anki with the game" should be on.
-2. Home tab → Active Game Capture card: select Nekopara's scene → **Run Capture Wizard**. Hook step:
-   click the line that matches the dialogue → "Next: OCR for pictures and extra boxes". OCR step:
-   "OCR on demand (recommended)" is preselected. Save. (Nekopara's old profile says Auto OCR, no hook.)
-3. Start the game. Within a few seconds: Anki opens, the overlay appears, the hook delivers text.
+2. Home tab → Active Game Capture card: select Nekopara's scene → **Run Capture Wizard**. First
+   question: **Visual novel on PC**. Hook step: click the line that matches the dialogue → "Next: OCR
+   for pictures and extra boxes". OCR step: "OCR on demand (recommended)" is preselected. Save.
+3. Press **Play** (or start the game). Within a few seconds: Anki opens, the overlay appears (no
+   settings window), the hook delivers text.
 4. Hover a word with Shift in the game: Yomitan pops up. Press **Num0**: the Ask AI panel shows the
    current line; ask a question, then a follow-up. Esc closes it.
 5. Read a while, close the game. `localhost:55000/review`: one **manual** session covering exactly
    that time. Lines shows them; Generate review works on it.
+   Num8 in the game ends/starts a session by hand; a short message over the game confirms it.
+   Alt-tab to a browser: the numpad types digits there (the overlay lets go of the keys).
 6. `localhost:55000/setup-check`: "Text source" says the built-in hook, OCR on demand.
 
 ### Hotkeys (numpad, NumLock on) — `cf3b4147`
@@ -332,9 +341,7 @@ GSM settings window: Qt calls keypad 3 "Num+3"; the hotkey fields convert to and
 opening settings no longer saves numpad hotkeys as empty, and pressing a numpad key records it.
 
 ### Still open (next)
-- Wizard first question "What kind of game is it?" (VN → hook + OCR on demand; can't-hook → OCR).
-- Numpad hotkeys with "Route all hotkeys through input server" on: the Rust input server does
-  not parse `num0`… yet (off by default).
-- Optional: numpad hotkeys only while the game has focus (they are global now).
-- Plain explanations in the GSM app (app vs web pages, sessions) and overlay settings window not
-  opening on every start.
+- Owner test of today's changes (steps above).
+- Trails in the Sky: the OCR-all-the-time path (wizard "can't be hooked").
+- The 5-minute overlay relaunch block: check `logs/overlay.log` next time it happens.
+- Then F if a second PC is near, D if anime/manga, else H (owner's earlier decision).

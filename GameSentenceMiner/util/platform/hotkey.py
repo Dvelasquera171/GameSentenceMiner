@@ -8,10 +8,33 @@ from GameSentenceMiner.util.logging_config import logger
 from GameSentenceMiner.util.platform.gamepad_hotkey import GamepadHotkeyDispatcher, GamepadInputClient
 
 
+# Numpad keys by setting name: (scan code, key name with NumLock on; None = any). The keyboard library
+# names these like the top-row keys, and they share scan codes with arrows/End/Home, so matching
+# needs the scan code plus the keypad flag.
+NUMPAD_KEYS = {
+    "num0": (82, "0"),
+    "num1": (79, "1"),
+    "num2": (80, "2"),
+    "num3": (81, "3"),
+    "num4": (75, "4"),
+    "num5": (76, "5"),
+    "num6": (77, "6"),
+    "num7": (71, "7"),
+    "num8": (72, "8"),
+    "num9": (73, "9"),
+    "numadd": (78, "+"),
+    "numsub": (74, "-"),
+    "nummult": (55, "*"),
+    "numdiv": (53, "/"),
+    "numdec": (83, None),
+}
+
+
 class HotkeyManager:
     def __init__(self):
         self._registered_hotkeys = []
         self._registered_key_hooks = []
+        self._registered_raw_hooks = []
         self._pynput_mapping = {}
         self._pynput_listener = None
         self._keyboard_module = None
@@ -102,6 +125,14 @@ class HotkeyManager:
                     pass
             self._registered_key_hooks.clear()
 
+            for hk in self._registered_raw_hooks:
+                try:
+                    if keyboard:
+                        keyboard.unhook(hk)
+                except (KeyError, ValueError):
+                    pass
+            self._registered_raw_hooks.clear()
+
         elif self.mode == "pynput":
             if self._pynput_listener:
                 self._pynput_listener.stop()
@@ -170,7 +201,21 @@ class HotkeyManager:
             if keyboard is None:
                 return
             try:
-                if self._should_use_single_key_listener(hotkey_str):
+                numpad = NUMPAD_KEYS.get(hotkey_str.lower().replace(" ", ""))
+                if numpad is not None:
+                    scan_code, key_name = numpad
+
+                    def on_numpad(event, scan_code=scan_code, key_name=key_name):
+                        if (
+                            getattr(event, "event_type", "") == "down"
+                            and getattr(event, "is_keypad", False)
+                            and getattr(event, "scan_code", None) == scan_code
+                            and (key_name is None or getattr(event, "name", None) == key_name)
+                        ):
+                            debounced_wrapper()
+
+                    self._registered_raw_hooks.append(keyboard.hook(on_numpad))
+                elif self._should_use_single_key_listener(hotkey_str):
                     hook = keyboard.on_press_key(hotkey_str, lambda _: debounced_wrapper())
                     self._registered_key_hooks.append(hook)
                 elif self._should_use_press_state_listeners(hotkey_str):

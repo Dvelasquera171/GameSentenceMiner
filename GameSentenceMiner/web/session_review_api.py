@@ -192,6 +192,19 @@ def register_session_review_routes(app):
         )
         return jsonify({"closed": [vars(r) for r in closed]}), 200
 
+    @app.route("/api/review/sessions/toggle", methods=["POST"])
+    def review_toggle_session():
+        """Overlay session hotkey: End when the current game has an open session, else Start."""
+        data = request.get_json(silent=True) or {}
+        game_key = str(data.get("game_key") or "").strip()
+        game_name = str(data.get("game_name") or "").strip()
+        if not game_key:
+            game_key, game_name = _current_game_key_and_name()
+        if not game_key:
+            return jsonify({"error": "No game selected and no current game detected."}), 400
+        action, rows = reading_sessions.toggle_manual_session(game_key, game_name)
+        return jsonify({"action": action, "game_name": game_name, "sessions": [vars(r) for r in rows]}), 200
+
     @app.route("/api/review/session-lines", methods=["GET"])
     def review_session_lines():
         """Lines of one session, so the page can show them and delete them via /api/delete-sentence-lines."""

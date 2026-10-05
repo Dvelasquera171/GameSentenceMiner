@@ -931,12 +931,23 @@ function captureHotkey(event: React.KeyboardEvent<HTMLInputElement>): string {
   if (event.altKey) {
     keys.push("Alt");
   }
-  if (event.key && !["Control", "Shift", "Alt"].includes(event.key)) {
+  const numpadKey = NUMPAD_CODES[event.code];
+  if (numpadKey) {
+    // Numpad keys share event.key with the top row; the OCR hotkey listener needs them apart.
+    keys.push(numpadKey);
+  } else if (event.key && !["Control", "Shift", "Alt"].includes(event.key)) {
     keys.push(event.key.length === 1 ? event.key.toUpperCase() : event.key);
   }
 
   return keys.join("+");
 }
+
+const NUMPAD_CODES: Record<string, string> = {
+  Numpad0: "num0", Numpad1: "num1", Numpad2: "num2", Numpad3: "num3", Numpad4: "num4",
+  Numpad5: "num5", Numpad6: "num6", Numpad7: "num7", Numpad8: "num8", Numpad9: "num9",
+  NumpadAdd: "numadd", NumpadSubtract: "numsub", NumpadMultiply: "nummult",
+  NumpadDivide: "numdiv", NumpadDecimal: "numdec"
+};
 
 function getLegacyAssetPath(fileName: string): string {
   const base = import.meta.env.BASE_URL.endsWith("/")

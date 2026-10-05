@@ -187,6 +187,7 @@ interface StoreConfig {
     launchAnkiWithGame: boolean; // Start Anki when a game becomes active
     ankiPath: string; // anki.exe; empty = standard install locations
     gameLaunchTargets: Record<string, { path: string; steamAppId?: string }>; // by OBS scene id: how Play starts the game
+    ocrNumpadHotkeysApplied: boolean; // one-time move of default OCR hotkeys to the numpad
     quitOnWindowClose: boolean; // Whether the main window X button quits instead of hiding to tray
     textCaptureWizardEnabled: boolean; // Whether to show the text capture wizard after capture setup
     obsOcrScenes: string[];
@@ -279,7 +280,7 @@ export const store = new Store<StoreConfig>({
             manualOcrGamepad: "",
             manualOcrDelayMs: 0,
             manualOcrDelayGamepadOnly: false,
-            areaSelectOcrHotkey: "Ctrl+Shift+O",
+            areaSelectOcrHotkey: "num2",
             areaSelectOcrGamepad: "",
             addAreaOcrHotkey: "Alt+Shift+N",
             addAreaOcrGamepad: "",
@@ -336,6 +337,7 @@ export const store = new Store<StoreConfig>({
         launchAnkiWithGame: true,
         ankiPath: '',
         gameLaunchTargets: {},
+        ocrNumpadHotkeysApplied: false,
         quitOnWindowClose: false,
         textCaptureWizardEnabled: true,
         obsOcrScenes: [],
@@ -1184,7 +1186,27 @@ export function setKeepNewline(keep: boolean): void {
     store.set("OCR.keep_newline", keep);
 }
 
+// Ctrl/Shift/Alt skip text or do other things in visual novels; the numpad rarely does.
+// Moves hotkeys still on their old defaults once; customised ones stay.
+function ensureOcrNumpadHotkeys(): void {
+    if (store.get("ocrNumpadHotkeysApplied", false)) return;
+    const ocr = store.get("OCR") as Partial<OCRConfig> | undefined;
+    if (ocr && typeof ocr === "object") {
+        const next = { ...ocr };
+        // Before the menu hotkey split, manualOcrHotkey held the menu key; getOCRConfig handles that case.
+        if (ocr.menuOcrHotkey !== undefined && (ocr.manualOcrHotkey ?? "Ctrl+Shift+M") === "Ctrl+Shift+M") {
+            next.manualOcrHotkey = "num1";
+        }
+        if ((ocr.areaSelectOcrHotkey ?? "Ctrl+Shift+O") === "Ctrl+Shift+O") {
+            next.areaSelectOcrHotkey = "num2";
+        }
+        store.set("OCR", next as OCRConfig);
+    }
+    store.set("ocrNumpadHotkeysApplied", true);
+}
+
 export function getOCRConfig(): OCRConfig {
+    ensureOcrNumpadHotkeys();
     let config = store.get("OCR");
     config = {
         ...config,
@@ -1196,7 +1218,7 @@ export function getOCRConfig(): OCRConfig {
             ...config,
             menuOcrHotkey: config.manualOcrHotkey || "Ctrl+Shift+G",
             menuOcrGamepad: config.manualOcrGamepad || "",
-            manualOcrHotkey: "Ctrl+Shift+M",
+            manualOcrHotkey: "num1",
             manualOcrGamepad: "",
         };
     }
@@ -1264,6 +1286,7 @@ export function setFuriganaFilterSensitivity(size: number): void {
 }
 
 export function getManualOcrHotkey(): string {
+    ensureOcrNumpadHotkeys();
     return store.get("OCR.manualOcrHotkey");
 }
 
@@ -1280,6 +1303,7 @@ export function setSendToClipboard(sendToClipboard: boolean): void {
 }
 
 export function getAreaSelectOcrHotkey(): string {
+    ensureOcrNumpadHotkeys();
     return store.get("OCR.areaSelectOcrHotkey");
 }
 

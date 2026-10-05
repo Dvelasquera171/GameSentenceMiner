@@ -33,6 +33,7 @@ const {
 const {
   createLeadingEdgeCooldownHandler,
   isMouseHotkey,
+  migrateLegacyHotkeyDefaults,
   normalizeConfiguredHotkeyValues,
   registerHotkeyWithFallback,
   shouldSuppressGamepadToggleDuringFocusTransition,
@@ -288,7 +289,7 @@ const STARTUP_NOTIFICATION_WIDTH = 460;
 const STARTUP_NOTIFICATION_HEIGHT = 130;
 const OVERLAY_WS_COMMAND_OPEN_SETTINGS = "open-overlay-settings";
 const DEFAULT_MANUAL_HOTKEY = "Shift + Space";
-const DEFAULT_TEXTHOOKER_HOTKEY = "Alt+Shift+W";
+const DEFAULT_TEXTHOOKER_HOTKEY = "num4";
 const PROFILE_SWITCH_FOCUS_RESTORE_SUPPRESSION_MS = 5000;
 const MANUAL_MODE_INACTIVE_BEHAVIOR_HIDE_OVERLAY = "hide-overlay";
 const MANUAL_MODE_INACTIVE_BEHAVIOR_DISABLE_INTERACTION = "disable-interaction";
@@ -367,6 +368,7 @@ const OVERLAY_NON_PROFILE_SETTING_KEYS = new Set([
   "gamepadJpdbApiKey",
   "gamepadYomitanApiUrl",
   "dictionaryReaderSelection",
+  "numpadHotkeysApplied",
 ]);
 
 function getPackagedResourcesPath() {
@@ -1056,12 +1058,15 @@ const DEFAULT_USER_SETTINGS = Object.freeze({
   "manualModeInactiveBehavior": MANUAL_MODE_INACTIVE_BEHAVIOR_HIDE_OVERLAY,
   "manualModeDisableInteractionFocusOverlay": false,
   "showHotkey": DEFAULT_MANUAL_HOTKEY,
-  "toggleFuriganaHotkey": "Alt+F",
-  "toggleWindowHotkey": "Alt+Shift+H",
+  // Numpad layout (NumLock on): VNs rarely bind numpad keys, unlike Ctrl/Shift/Alt.
+  "toggleFuriganaHotkey": "num7",
+  "toggleWindowHotkey": "num5",
   "minimizeHotkey": "Alt+Shift+J",
-  "yomitanSettingsHotkey": "Alt+Shift+Y",
-  "overlaySettingsHotkey": "Alt+Shift+S",
-  "translateHotkey": "Alt+T",
+  "yomitanSettingsHotkey": "nummult",
+  "overlaySettingsHotkey": "numdiv",
+  "translateHotkey": "num6",
+  "sessionToggleHotkey": "num8",
+  "numpadHotkeysApplied": true,
   // Advanced: route every overlay hotkey through the Rust input server's global
   // keyboard hook instead of Electron globalShortcut. For games (e.g. Skyrim) that
   // swallow normal global hotkeys. Also enables F13-F24 bindings.
@@ -1076,7 +1081,7 @@ const DEFAULT_USER_SETTINGS = Object.freeze({
   "showLiveGoals": true,
   "hideCompletedGoals": true,
   "hideLiveStatsOnTextOverlap": true,
-  "liveStatsToggleHotkey": "Alt+Shift+L",
+  "liveStatsToggleHotkey": "numsub",
   // Per-goal overlay selection chosen in the settings window:
   //   { [goalId]: { enabled: boolean, view: "today" | "overall" } }
   "overlayGoals": {},
@@ -1203,6 +1208,7 @@ const CONFIGURED_HOTKEY_SETTING_KEYS = Object.freeze([
   "liveStatsToggleHotkey",
   "texthookerHotkey",
   "aiHelpHotkey",
+  "sessionToggleHotkey",
   "gamepadKeyboardHotkey",
 ]);
 const CONFIGURED_HOTKEY_SETTING_KEY_SET = new Set(CONFIGURED_HOTKEY_SETTING_KEYS);
@@ -2559,6 +2565,27 @@ const aiHelpWindow = aiHelp.createAiHelpWindowController({
   onHidden: () => requestBackendFocusRestore("ai-help-closed", { force: true }),
 });
 
+// Session hotkey: GSM ends the current game's open reading session, or starts one.
+async function toggleReadingSessionFromHotkey() {
+  let status;
+  try {
+    const url = new URL("/api/review/sessions/toggle", userSettings.texthookerUrl || DEFAULT_TEXTHOOKER_URL);
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const body = await response.json().catch(() => ({}));
+    const game = body.game_name ? ` · ${body.game_name}` : "";
+    if (!response.ok) {
+      status = body.error || `Session: GSM answered ${response.status}`;
+    } else {
+      status = body.action === "ended" ? `Reading session ended${game}` : `Reading session started${game}`;
+    }
+  } catch (error) {
+    console.warn("[Session] Toggle failed:", error.message);
+    status = "Session: GSM is not reachable";
+  }
+  console.log(`[Session] ${status}`);
+  showStartupNotification(getCurrentOverlayMonitor({ logFallback: false }), status);
+}
+
 function handleOverlayWebSocketControlMessage(type, data) {
   if ((type !== "ws2" && type !== "backend-connector") || data === "True" || data === "False") {
     return false;
@@ -3609,13 +3636,15 @@ function getOverlayPageUrl(relativePath) {
   return new URL(relativePath, baseUrl).toString();
 }
 
-function loadOverlayPage(win, relativePath) {
+function loadOverlayPage(win, relativePath, query = null) {
   const pageUrl = getOverlayPageUrl(relativePath);
   if (pageUrl) {
-    return win.loadURL(pageUrl);
+    const url = new URL(pageUrl);
+    for (const [key, value] of Object.entries(query || {})) url.searchParams.set(key, value);
+    return win.loadURL(url.toString());
   }
   const filePath = path.isAbsolute(relativePath) ? relativePath : path.join(__dirname, relativePath);
-  return win.loadFile(filePath);
+  return query ? win.loadFile(filePath, { query }) : win.loadFile(filePath);
 }
 
 const EXTENSION_READY_TIMEOUT_MS = 15000;
@@ -4701,6 +4730,19 @@ if (hasPersistedOverlaySettings) {
       shouldPersistOverlaySettings = true;
     }
 
+    if (oldUserSettings.numpadHotkeysApplied !== true) {
+      const migratedHotkeys = migrateLegacyHotkeyDefaults(userSettings);
+      const profileContainer = userSettings[OVERLAY_PROFILE_SETTINGS_KEY];
+      if (profileContainer && typeof profileContainer === "object") {
+        for (const profileSettings of Object.values(profileContainer)) {
+          migrateLegacyHotkeyDefaults(profileSettings);
+        }
+      }
+      userSettings.numpadHotkeysApplied = true;
+      shouldPersistOverlaySettings = true;
+      console.log(`[Hotkeys] Moved default hotkeys to the numpad: ${migratedHotkeys.join(", ") || "none"}`);
+    }
+
     if (!Object.prototype.hasOwnProperty.call(oldUserSettings, "hideOnStartup")) {
       userSettings.hideOnStartup = true;
       shouldPersistOverlaySettings = true;
@@ -5053,16 +5095,24 @@ function getOverlayBoundsForDisplay(display) {
   };
 }
 
-function showStartupNotification(display) {
+function showStartupNotification(display, status = "") {
   if (startupNotificationWindow && !startupNotificationWindow.isDestroyed()) {
-    return;
+    if (!status) {
+      return;
+    }
+    if (startupNotificationCloseTimer) {
+      clearTimeout(startupNotificationCloseTimer);
+      startupNotificationCloseTimer = null;
+    }
+    startupNotificationWindow.destroy();
+    startupNotificationWindow = null;
   }
 
   const displayBounds = getOverlayBoundsForDisplay(display || getCurrentOverlayMonitor({ logFallback: true }));
   const x = Math.round(displayBounds.x + (displayBounds.width - STARTUP_NOTIFICATION_WIDTH) / 2);
   const y = Math.round(displayBounds.y + (displayBounds.height - STARTUP_NOTIFICATION_HEIGHT) / 2);
 
-  startupNotificationWindow = new BrowserWindow({
+  const notificationWindow = new BrowserWindow({
     x,
     y,
     width: STARTUP_NOTIFICATION_WIDTH,
@@ -5085,23 +5135,26 @@ function showStartupNotification(display) {
     },
   });
 
-  startupNotificationWindow.removeMenu();
-  startupNotificationWindow.setAlwaysOnTop(true, "screen-saver");
-  startupNotificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-  startupNotificationWindow.setIgnoreMouseEvents(true);
+  startupNotificationWindow = notificationWindow;
+  notificationWindow.removeMenu();
+  notificationWindow.setAlwaysOnTop(true, "screen-saver");
+  notificationWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  notificationWindow.setIgnoreMouseEvents(true);
 
-  startupNotificationWindow.once("ready-to-show", () => {
-    if (!startupNotificationWindow || startupNotificationWindow.isDestroyed()) return;
-    startupNotificationWindow.showInactive();
+  notificationWindow.once("ready-to-show", () => {
+    if (notificationWindow.isDestroyed()) return;
+    notificationWindow.showInactive();
     startupNotificationCloseTimer = setTimeout(() => {
       startupNotificationCloseTimer = null;
-      if (startupNotificationWindow && !startupNotificationWindow.isDestroyed()) {
-        startupNotificationWindow.close();
+      if (!notificationWindow.isDestroyed()) {
+        notificationWindow.close();
       }
     }, STARTUP_NOTIFICATION_DURATION_MS);
   });
 
-  startupNotificationWindow.on("closed", () => {
+  notificationWindow.on("closed", () => {
+    // A newer toast may already have replaced this one.
+    if (startupNotificationWindow !== notificationWindow) return;
     if (startupNotificationCloseTimer) {
       clearTimeout(startupNotificationCloseTimer);
       startupNotificationCloseTimer = null;
@@ -5109,7 +5162,7 @@ function showStartupNotification(display) {
     startupNotificationWindow = null;
   });
 
-  loadOverlayPage(startupNotificationWindow, "startup-notification.html");
+  loadOverlayPage(notificationWindow, "startup-notification.html", status ? { status } : null);
 }
 
 function normalizeDisplayRect(rect, fallback = { x: 0, y: 0, width: 1920, height: 1080 }) {
@@ -6764,7 +6817,7 @@ function createTray() {
 function updateTrayMenu() {
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Toggle Window (Alt+Shift+H)',
+      label: `Toggle Window (${userSettings.toggleWindowHotkey || DEFAULT_USER_SETTINGS.toggleWindowHotkey})`,
       click: () => {
         if (!canUseOverlayCapture()) return;
         if (mainWindow) {
@@ -7286,7 +7339,7 @@ async function startOverlayAppImpl() {
   // The oldHotkey param is retained for call-site compatibility; setAppHotkey
   // clears the id's prior registration in both backends, so it is no longer used.
   function registerToggleWindowHotkey(_oldHotkey) {
-    setAppHotkey("toggleWindow", userSettings.toggleWindowHotkey || "Alt+Shift+H", () => {
+    setAppHotkey("toggleWindow", userSettings.toggleWindowHotkey || DEFAULT_USER_SETTINGS.toggleWindowHotkey, () => {
       if (!canUseOverlayCapture()) return;
       if (mainWindow) {
         ensureMainWindowIsOnConnectedDisplay("hotkey-toggle-window");
@@ -7322,7 +7375,7 @@ async function startOverlayAppImpl() {
 
   // Register yomitan settings hotkey
   function registerYomitanSettingsHotkey(_oldHotkey) {
-    setAppHotkey("yomitanSettings", userSettings.yomitanSettingsHotkey || "Alt+Shift+Y", () => {
+    setAppHotkey("yomitanSettings", userSettings.yomitanSettingsHotkey || DEFAULT_USER_SETTINGS.yomitanSettingsHotkey, () => {
       openYomitanSettings();
     }, { settingKey: "yomitanSettingsHotkey" });
   }
@@ -7330,7 +7383,7 @@ async function startOverlayAppImpl() {
 
   // Register overlay settings hotkey
   function registerOverlaySettingsHotkey(_oldHotkey) {
-    setAppHotkey("overlaySettings", userSettings.overlaySettingsHotkey || "Alt+Shift+S", () => {
+    setAppHotkey("overlaySettings", userSettings.overlaySettingsHotkey || DEFAULT_USER_SETTINGS.overlaySettingsHotkey, () => {
       openSettings();
     }, { settingKey: "overlaySettingsHotkey" });
   }
@@ -7354,14 +7407,14 @@ async function startOverlayAppImpl() {
   }
 
   function registerTranslateHotkey(_oldHotkey) {
-    setAppHotkey("translate", userSettings.translateHotkey || "Alt+T", requestOrToggleTranslation,
+    setAppHotkey("translate", userSettings.translateHotkey || DEFAULT_USER_SETTINGS.translateHotkey, requestOrToggleTranslation,
       { settingKey: "translateHotkey", debounceMs: TOGGLE_HOTKEY_COOLDOWN_MS });
   }
   registerTranslateHotkey();
 
   // Register toggle furigana hotkey
   function registerToggleFuriganaHotkey(_oldHotkey) {
-    setAppHotkey("toggleFurigana", userSettings.toggleFuriganaHotkey || "Alt+F", () => {
+    setAppHotkey("toggleFurigana", userSettings.toggleFuriganaHotkey || DEFAULT_USER_SETTINGS.toggleFuriganaHotkey, () => {
       if (mainWindow) {
         mainWindow.webContents.send("toggle-furigana-visibility");
       }
@@ -7370,7 +7423,7 @@ async function startOverlayAppImpl() {
   registerToggleFuriganaHotkey();
 
   function registerLiveStatsToggleHotkey(_oldHotkey) {
-    setAppHotkey("liveStatsToggle", userSettings.liveStatsToggleHotkey || "Alt+Shift+L", () => {
+    setAppHotkey("liveStatsToggle", userSettings.liveStatsToggleHotkey || DEFAULT_USER_SETTINGS.liveStatsToggleHotkey, () => {
       advanceLiveStatsVisibilityMode("hotkey");
     }, { settingKey: "liveStatsToggleHotkey", debounceMs: TOGGLE_HOTKEY_COOLDOWN_MS });
   }
@@ -7381,6 +7434,14 @@ async function startOverlayAppImpl() {
       { settingKey: "aiHelpHotkey", debounceMs: TOGGLE_HOTKEY_COOLDOWN_MS });
   }
   registerAiHelpHotkey();
+
+  // Start/End the reading session for the current game without leaving it.
+  function registerSessionToggleHotkey(_oldHotkey) {
+    setAppHotkey("sessionToggle", userSettings.sessionToggleHotkey || DEFAULT_USER_SETTINGS.sessionToggleHotkey,
+      () => { toggleReadingSessionFromHotkey(); },
+      { settingKey: "sessionToggleHotkey", debounceMs: TOGGLE_HOTKEY_COOLDOWN_MS });
+  }
+  registerSessionToggleHotkey();
   
   function registerGamepadKeyboardHotkey(oldHotkey) {
     const keysToUnregister = new Set([
@@ -7478,6 +7539,7 @@ async function startOverlayAppImpl() {
     if (changed("translateHotkey")) registerTranslateHotkey(previous.translateHotkey);
     if (changed("texthookerHotkey")) registerTexthookerHotkey(previous.texthookerHotkey);
     if (changed("aiHelpHotkey")) registerAiHelpHotkey(previous.aiHelpHotkey);
+    if (changed("sessionToggleHotkey")) registerSessionToggleHotkey(previous.sessionToggleHotkey);
     if (changed("liveStatsToggleHotkey")) registerLiveStatsToggleHotkey(previous.liveStatsToggleHotkey);
     if (changed("gamepadKeyboardHotkey") || changed("gamepadKeyboardEnabled") || changed("gamepadEnabled")) {
       registerGamepadKeyboardHotkey(previous.gamepadKeyboardHotkey);
@@ -7496,6 +7558,7 @@ async function startOverlayAppImpl() {
       registerLiveStatsToggleHotkey();
       registerTexthookerHotkey();
       registerAiHelpHotkey();
+      registerSessionToggleHotkey();
       registerGamepadKeyboardHotkey();
       registerManualShowHotkey();
       syncAppHotkeyInputServerConnection(`${reason}:route-all-hotkeys`);
@@ -8411,6 +8474,9 @@ async function startOverlayAppImpl() {
       case "aiHelpHotkey":
         registerAiHelpHotkey(oldValue);
         break;
+      case "sessionToggleHotkey":
+        registerSessionToggleHotkey(oldValue);
+        break;
       case "liveStatsToggleHotkey":
         registerLiveStatsToggleHotkey(oldValue);
         break;
@@ -8439,6 +8505,7 @@ async function startOverlayAppImpl() {
         registerLiveStatsToggleHotkey();
         registerTexthookerHotkey();
         registerAiHelpHotkey();
+        registerSessionToggleHotkey();
         registerGamepadKeyboardHotkey();
         registerManualShowHotkey();
         syncAppHotkeyInputServerConnection("setting-changed:routeAllHotkeysThroughInputServer");

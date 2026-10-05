@@ -235,3 +235,26 @@ def test_end_sessions_by_game_name(client):
     assert res.status_code == 200 and [r["id"] for r in res.json["closed"]] == [row.id]
     assert ReadingSessionsTable.get(row.id).status == "closed"
     assert ReadingSessionsTable.get(other.id).status == "open"
+
+
+def test_toggle_session_starts_then_ends(client, monkeypatch):
+    from GameSentenceMiner.util.database.session_review_tables import ReadingSessionsTable
+
+    monkeypatch.setattr(session_review_api, "_current_game_key_and_name", lambda: ("42", "NEKOPARA vol.1"))
+    other = ReadingSessionsTable(game_key="43", game_name="Other", start_ts=1.0)
+    other.save()
+
+    started = client.post("/api/review/sessions/toggle", json={})
+    assert started.status_code == 200 and started.json["action"] == "started"
+    session_id = started.json["sessions"][0]["id"]
+    assert ReadingSessionsTable.get(session_id).status == "open"
+
+    ended = client.post("/api/review/sessions/toggle", json={})
+    assert ended.json["action"] == "ended" and [r["id"] for r in ended.json["sessions"]] == [session_id]
+    assert ReadingSessionsTable.get(session_id).status == "closed"
+    assert ReadingSessionsTable.get(other.id).status == "open"
+
+
+def test_toggle_session_without_game_is_400(client, monkeypatch):
+    monkeypatch.setattr(session_review_api, "_current_game_key_and_name", lambda: ("", ""))
+    assert client.post("/api/review/sessions/toggle", json={}).status_code == 400

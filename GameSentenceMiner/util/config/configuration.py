@@ -1236,7 +1236,8 @@ class OBS:
 @dataclass
 class Hotkeys:
     open_utility: str = "ctrl+m"
-    play_latest_audio: str = "f7"
+    # Numpad: visual novels rarely bind it, unlike Ctrl/Shift/Alt and F-keys (NumLock must be on).
+    play_latest_audio: str = "num3"
     play_latest_audio_gamepad: str = ""
     mute_target_window: str = ""
     mute_target_window_gamepad: str = ""
@@ -1247,9 +1248,10 @@ class Hotkeys:
     copy_game_screenshot_gamepad: str = ""
     process_pause: str = ""
     process_pause_gamepad: str = ""
-    pause_text_intake: str = ""
+    pause_text_intake: str = "num9"
     pause_text_intake_gamepad: str = ""
     relay_outputs_when_text_intake_paused: bool = True
+    numpad_layout_applied: bool = True
 
 
 @dataclass_json
@@ -2066,7 +2068,20 @@ class Config:
             cls._migrate_anki_profile_data(profile_data)
             cls._migrate_single_port_fields(profile_data)
             cls._migrate_websocket_sources(profile_data)
+            cls._migrate_numpad_hotkeys(profile_data)
         return data
+
+    @staticmethod
+    def _migrate_numpad_hotkeys(profile_data: Dict[str, Any]) -> None:
+        """One-time move of still-default hotkeys to the numpad layout; customised keys stay."""
+        hotkeys = profile_data.get("hotkeys") if isinstance(profile_data, dict) else None
+        if not isinstance(hotkeys, dict) or hotkeys.get("numpad_layout_applied"):
+            return
+        if str(hotkeys.get("play_latest_audio", "f7")).strip().lower() == "f7":
+            hotkeys["play_latest_audio"] = "num3"
+        if not str(hotkeys.get("pause_text_intake", "") or "").strip():
+            hotkeys["pause_text_intake"] = "num9"
+        hotkeys["numpad_layout_applied"] = True
 
     @staticmethod
     def _migrate_process_pausing_data(profile_data: Dict[str, Any]) -> None:

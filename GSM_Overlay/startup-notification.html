@@ -55,6 +55,8 @@
       color: #b6bdc3;
       font-size: 12px;
       font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .startup-notification__dot {
@@ -89,8 +91,13 @@
     <span class="startup-notification__name">GSM Overlay</span>
     <span class="startup-notification__status">
       <span class="startup-notification__dot" aria-hidden="true"></span>
-      Ready
+      <span id="status-text">Ready</span>
     </span>
   </div>
+  <script>
+    // Status toasts (e.g. the session hotkey) pass their text as ?status=.
+    const status = new URLSearchParams(location.search).get("status");
+    if (status) document.getElementById("status-text").textContent = status;
+  </script>
 </body>
 </html>

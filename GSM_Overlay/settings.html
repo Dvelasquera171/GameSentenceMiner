@@ -1539,8 +1539,8 @@
           <div id="livestatstoggle-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
         </span>
         <div class="input-container">
-          <input type="text" id="liveStatsToggleHotkey" value="Alt+Shift+L"
-            title="Enter a valid hotkey (e.g., Alt+Shift+L)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+          <input type="text" id="liveStatsToggleHotkey" value="numsub"
+            title="Enter a valid hotkey (e.g., Alt+Shift+L)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2049,8 +2049,8 @@
           <div id="furigana-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
         </span>
         <div class="input-container">
-          <input type="text" id="toggleFuriganaHotkey" value="Alt+F"
-            title="Enter a valid hotkey (e.g., Alt+F)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+          <input type="text" id="toggleFuriganaHotkey" value="num7"
+            title="Enter a valid hotkey (e.g., Alt+F)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2125,8 +2125,8 @@
           <div id="texthooker-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
         </span>
         <div class="input-container">
-          <input type="text" id="texthookerHotkey" value="Alt+Shift+R"
-            title="Enter a valid hotkey (e.g., Alt+Shift+R)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+          <input type="text" id="texthookerHotkey" value="num4"
+            title="Enter a valid hotkey (e.g., Alt+Shift+R)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2142,6 +2142,17 @@
         </span>
         <div class="input-container">
           <input type="text" id="aiHelpHotkey" value="num0" title="Enter a hotkey, e.g. num0 (numpad 0)" />
+        </div>
+      </label>
+      <label>
+        <span class="label-text">
+          Reading Session Hotkey
+          <div class="hotkey-info">Starts a reading session for the current game, or ends the one that is running. A short message over the game confirms it. Default Num8.</div>
+          <div class="hotkey-info" style="color: #4CAF50; font-size: 10px;">Click input and press your desired key (numpad keys work)</div>
+          <div id="sessiontoggle-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
+        </span>
+        <div class="input-container">
+          <input type="text" id="sessionToggleHotkey" value="num8" title="Enter a hotkey, e.g. num8 (numpad 8)" />
         </div>
       </label>
       <label>
@@ -2170,8 +2181,8 @@
           <div id="togglewindow-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
         </span>
         <div class="input-container">
-          <input type="text" id="toggleWindowHotkey" value="Alt+Shift+H"
-            title="Enter a valid hotkey (e.g., Alt+Shift+H)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+          <input type="text" id="toggleWindowHotkey" value="num5"
+            title="Enter a valid hotkey (e.g., Alt+Shift+H)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2187,7 +2198,7 @@
         </span>
         <div class="input-container">
           <input type="text" id="minimizeHotkey" value="Alt+Shift+J"
-            title="Enter a valid hotkey (e.g., Alt+Shift+J)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+            title="Enter a valid hotkey (e.g., Alt+Shift+J)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2202,8 +2213,8 @@
           <div id="yomitansettings-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
         </span>
         <div class="input-container">
-          <input type="text" id="yomitanSettingsHotkey" value="Alt+Shift+Y"
-            title="Enter a valid hotkey (e.g., Alt+Shift+Y)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+          <input type="text" id="yomitanSettingsHotkey" value="nummult"
+            title="Enter a valid hotkey (e.g., Alt+Shift+Y)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2218,8 +2229,8 @@
           <div id="overlaysettings-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
         </span>
         <div class="input-container">
-          <input type="text" id="overlaySettingsHotkey" value="Alt+Shift+S"
-            title="Enter a valid hotkey (e.g., Alt+Shift+S)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+          <input type="text" id="overlaySettingsHotkey" value="numdiv"
+            title="Enter a valid hotkey (e.g., Alt+Shift+S)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -2279,8 +2290,8 @@
             <div id="translate-ctrl-warning" class="hotkey-info" style="color: #ff6b6b; font-size: 10px; display: none;">⚠️ Warning: Ctrl key may interfere with game controls (text skipping)</div>
           </span>
           <div class="input-container">
-            <input type="text" id="translateHotkey" value="Alt+T"
-              title="Enter a valid hotkey (e.g., Alt+T)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+            <input type="text" id="translateHotkey" value="num6"
+              title="Enter a valid hotkey (e.g., Alt+T)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
             <button type="button" class="guide-button"
               onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
               Guide
@@ -2686,7 +2697,7 @@
         </span>
         <div class="input-container">
           <input type="text" id="gamepadKeyboardHotkey" value="Alt+G"
-            title="Enter a valid hotkey (e.g., Alt+G)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Note: Some keys may not work (e.g., numpad +, certain special keys)&#10;Use regular keyboard keys for best compatibility" />
+            title="Enter a valid hotkey (e.g., Alt+G)&#10;&#10;⚠️ WARNING: Avoid Ctrl key in games/visual novels&#10;(Ctrl is commonly used for text skipping)&#10;&#10;Numpad keys work with NumLock on (num0-num9, numadd, numsub, nummult, numdiv)" />
           <button type="button" class="guide-button"
             onclick="window.open('https://www.electronjs.org/docs/latest/tutorial/keyboard-shortcuts', '_blank')">
             Guide
@@ -3255,6 +3266,7 @@
       overlaySettingsHotkey: { warningElementId: "overlaysettings-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
       texthookerHotkey: { warningElementId: "texthooker-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
       aiHelpHotkey: { warningElementId: "aihelp-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
+      sessionToggleHotkey: { warningElementId: "sessiontoggle-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
       gamepadKeyboardHotkey: { warningElementId: "gamepadkeyboard-ctrl-warning", showCtrlWarning: true, placeholder: "Press keys..." },
     });
     const VALID_PLATFORM_OVERRIDE_VALUES = new Set(["win32", "linux", "darwin"]);
@@ -4168,6 +4180,7 @@
       createHotkeyBinding("overlaySettingsHotkey", "#overlaySettingsHotkey"),
       createHotkeyBinding("texthookerHotkey", "#texthookerHotkey"),
       createHotkeyBinding("aiHelpHotkey", "#aiHelpHotkey"),
+      createHotkeyBinding("sessionToggleHotkey", "#sessionToggleHotkey"),
       createCheckboxBinding("gamepadEnabled", "#gamepadEnabled", {
         afterApply: () => syncGamepadSettingsEnabledUi(),
       }),

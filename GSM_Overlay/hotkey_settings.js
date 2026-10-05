@@ -194,11 +194,43 @@ function shouldSuppressGamepadToggleDuringFocusTransition({
   );
 }
 
+// Old Ctrl/Alt/Shift defaults clash with VN controls; the numpad layout replaces them once.
+// Only values still at an old default move, so hotkeys the user picked stay.
+const NUMPAD_HOTKEY_MIGRATION = Object.freeze({
+  texthookerHotkey: ["Alt+Shift+W", "num4"],
+  toggleWindowHotkey: ["Alt+Shift+H", "num5"],
+  translateHotkey: ["Alt+T", "num6"],
+  toggleFuriganaHotkey: ["Alt+F", "num7"],
+  overlaySettingsHotkey: ["Alt+Shift+S", "numdiv"],
+  yomitanSettingsHotkey: ["Alt+Shift+Y", "nummult"],
+  liveStatsToggleHotkey: ["Alt+Shift+L", "numsub"],
+});
+
+function compactHotkey(value) {
+  return String(value || "").replace(/\s+/g, "").toLowerCase();
+}
+
+function migrateLegacyHotkeyDefaults(settings, migration = NUMPAD_HOTKEY_MIGRATION) {
+  if (!settings || typeof settings !== "object") {
+    return [];
+  }
+  const changedKeys = [];
+  for (const [key, [oldValue, newValue]] of Object.entries(migration)) {
+    if (Object.prototype.hasOwnProperty.call(settings, key) && compactHotkey(settings[key]) === compactHotkey(oldValue)) {
+      settings[key] = newValue;
+      changedKeys.push(key);
+    }
+  }
+  return changedKeys;
+}
+
 module.exports = {
   createLeadingEdgeCooldownHandler,
   isMouseHotkey,
   isSupportedHotkey,
+  migrateLegacyHotkeyDefaults,
   normalizeConfiguredHotkeyValues,
+  NUMPAD_HOTKEY_MIGRATION,
   registerHotkeyWithFallback,
   shouldSuppressGamepadToggleDuringFocusTransition,
 };

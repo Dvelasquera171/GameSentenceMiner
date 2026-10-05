@@ -104,3 +104,58 @@ def test_register_preserves_spaces_inside_named_keys(monkeypatch):
     manager.register("Ctrl + Print Screen", lambda: None)
 
     assert [call[0] for call in fake_keyboard.on_press_key_calls] == ["Ctrl", "Print Screen"]
+
+
+class _FakeKeyboardWithHook(_FakeKeyboard):
+    def __init__(self):
+        super().__init__()
+        self.hooks = []
+        self.unhook_calls = []
+
+    def hook(self, callback):
+        self.hooks.append(callback)
+        return callback
+
+    def unhook(self, handle):
+        self.unhook_calls.append(handle)
+
+
+def _event(scan_code, name, is_keypad, event_type="down"):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(scan_code=scan_code, name=name, is_keypad=is_keypad, event_type=event_type)
+
+
+def test_numpad_hotkeys_fire_only_for_the_keypad_key(monkeypatch):
+    fake_keyboard = _FakeKeyboardWithHook()
+    manager = _make_manager(monkeypatch, fake_keyboard)
+    manager._holding_gap = 0
+    manager._execution_cooldown = 0
+    fired = []
+    manager.register("num1", lambda: fired.append("num1"))
+    manager.register("Num8", lambda: fired.append("num8"))
+    manager.register("numadd", lambda: fired.append("numadd"))
+
+    assert fake_keyboard.add_hotkey_calls == [] and fake_keyboard.on_press_key_calls == []
+    assert len(fake_keyboard.hooks) == 3
+    press = lambda event: [hook(event) for hook in fake_keyboard.hooks]  # noqa: E731
+
+    press(_event(2, "1", False))  # top-row 1
+    press(_event(79, "end", False))  # the End key shares the scan code
+    press(_event(79, "end", True))  # numpad 1 with NumLock off
+    press(_event(72, "up", False))  # arrow Up shares Num8's scan code
+    press(_event(79, "1", True, event_type="up"))
+    assert fired == []
+
+    press(_event(79, "1", True))
+    press(_event(72, "8", True))
+    press(_event(78, "+", True))
+    assert fired == ["num1", "num8", "numadd"]
+
+
+def test_clear_removes_numpad_hooks(monkeypatch):
+    fake_keyboard = _FakeKeyboardWithHook()
+    manager = _make_manager(monkeypatch, fake_keyboard)
+    manager.register("num9", lambda: None)
+    manager.clear()
+    assert fake_keyboard.unhook_calls == fake_keyboard.hooks

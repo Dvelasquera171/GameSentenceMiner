@@ -173,6 +173,17 @@ def end_sessions_for_game(game_name: str) -> List[ReadingSessionsTable]:
     return closed
 
 
+def toggle_manual_session(game_key: str, game_name: str = "") -> tuple[str, List[ReadingSessionsTable]]:
+    """One hotkey for Start and End: ends the game's open session, or starts one when none is open."""
+    open_rows = [row for row in ReadingSessionsTable.get_open() if row.game_key == game_key]
+    if open_rows:
+        for row in open_rows:
+            row.close()
+        logger.info(f"Ended reading session for {game_name or game_key} (hotkey)")
+        return "ended", open_rows
+    return "started", [start_manual_session(game_key, game_name)]
+
+
 def end_manual_session(session_id: Optional[int] = None, game_key: Optional[str] = None) -> List[ReadingSessionsTable]:
     """End button, or an automatic hook (game closed / OBS scene changed) calling with game_key."""
     if session_id is not None:

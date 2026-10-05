@@ -31,6 +31,14 @@ def recent_lines(lines, count: int) -> list:
     return result
 
 
+def title_for_lines(lines) -> str:
+    """The newest line's title: a game, or a video/manga from GSM Connect."""
+    for ln in reversed(lines or []):
+        if str(getattr(ln, "text", "") or "").strip():
+            return str(getattr(ln, "scene", "") or "")
+    return ""
+
+
 def _current_game() -> str:
     try:
         from GameSentenceMiner.obs import get_current_game
@@ -55,4 +63,7 @@ def register_ask_routes(app):
         except ValueError:
             count = 30
         count = max(1, min(MAX_RECENT_LINES, count))
-        return jsonify({"game": _current_game(), "lines": recent_lines(get_all_lines(), count)}), 200
+        all_lines = get_all_lines()
+        return jsonify(
+            {"game": title_for_lines(all_lines) or _current_game(), "lines": recent_lines(all_lines, count)}
+        ), 200

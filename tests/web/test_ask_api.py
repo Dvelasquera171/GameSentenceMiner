@@ -45,3 +45,11 @@ def test_ask_page_renders(client):
     page = client.get("/ask")
     assert page.status_code == 200
     assert b"/static/js/ask.js" in page.data and b'id="question"' in page.data
+
+
+def test_recent_lines_are_titled_after_the_newest_line(client, monkeypatch):
+    lines = [_line(0, "ゲーム"), _line(1, "動画")]
+    lines[0].scene, lines[1].scene = "NEKOPARA vol.1", "Frieren"
+    monkeypatch.setattr("GameSentenceMiner.util.text_log.get_all_lines", lambda: lines)
+    assert client.get("/api/ask/recent-lines").json["game"] == "Frieren"
+    assert ask_api.title_for_lines([]) == ""

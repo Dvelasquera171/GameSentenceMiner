@@ -36,6 +36,7 @@ SOURCE_PRIORITY = {
     SourceKind.SECONDARY: 30,
     SourceKind.WEBSOCKET: 30,
     SourceKind.CLIPBOARD: 35,
+    SourceKind.BROWSER: 35,
     SourceKind.TEXTHOOK: 40,
     SourceKind.SPEECH_RECOGNITION: 40,
     SourceKind.HOTKEY: 50,
@@ -132,7 +133,13 @@ class TextCoordinatorState:
             )
 
         newest = self._records[-1] if self._records else None
-        if newest is not None and _compact(newest.text) == _compact(full_processed):
+        incoming_scene = str(observation.metadata.get("scene", "") or "")
+        if (
+            newest is not None
+            and _compact(newest.text) == _compact(full_processed)
+            # The same words under another title (a video next to the game) are a new line.
+            and (not newest.scene or not incoming_scene or newest.scene == incoming_scene)
+        ):
             self.metrics.duplicates += 1
             return IngressResult(
                 IngressAck(

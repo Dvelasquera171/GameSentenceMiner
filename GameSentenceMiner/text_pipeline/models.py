@@ -33,6 +33,8 @@ class SourceKind(Enum):
     HOTKEY = "hotkey"
     SECONDARY = "secondary"
     SPEECH_RECOGNITION = "speech_recognition"
+    # GSM Connect browser extension: subtitles (YouTube, asbplayer, Manatan) and manga text boxes.
+    BROWSER = "browser"
     UNKNOWN = "unknown"
 
     @classmethod
@@ -58,6 +60,8 @@ class SourceKind(Enum):
             "windows_speech": cls.SPEECH_RECOGNITION,
             "windows_speech_recognition": cls.SPEECH_RECOGNITION,
             "mssr": cls.SPEECH_RECOGNITION,
+            "browser": cls.BROWSER,
+            "gsm_connect": cls.BROWSER,
         }
         if candidate in aliases:
             return aliases[candidate]

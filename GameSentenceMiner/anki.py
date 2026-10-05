@@ -3508,6 +3508,10 @@ def update_new_cards(new_card_ids):
             continue
 
 
+# SourceKind.BROWSER (GSM Connect); a string here keeps the text pipeline out of anki's imports.
+BROWSER_LINE_SOURCE = "browser"
+
+
 def _is_overlay_mine(card) -> bool:
     return any(str(tag).strip().lower() == "overlay" for tag in (getattr(card, "tags", None) or []))
 
@@ -3574,6 +3578,11 @@ def update_single_card(card):
     logger.debug(f"last mined line: {gsm_state.last_mined_line}, current sentence: {get_sentence(card)}")
     lines = _get_texthooking_page_module().get_selected_lines()
     game_line = _resolve_mined_line_for_card(card, lines)
+    if getattr(game_line, "source", None) == BROWSER_LINE_SOURCE:
+        # Mined in the browser (video or manga): OBS has none of it, so the card keeps the browser's media.
+        logger.info(f"Card {card.noteId} is from a browser line ({game_line.scene}); GSM leaves its media as made.")
+        gsm_status.remove_word_being_processed(card.get_field(get_config().anki.word_field))
+        return
     game_line.mined_time = datetime.now()
     current_word = card.get_field(get_config().anki.word_field) if card else ""
     timing_context = new_anki_card_timing_context(

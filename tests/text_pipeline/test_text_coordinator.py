@@ -609,3 +609,61 @@ def test_dialogue_repeated_once_is_kept_and_old_text_may_return_after_a_minute()
     _hook_line(state, "また明日", 5, 100)
     later = _hook_line(state, "はい", 6, 120)
     assert later.ack.status is IngressStatus.ACCEPTED
+
+
+def test_a_manga_page_burst_from_the_browser_becomes_separate_lines_under_its_title():
+    state = TextCoordinatorState(session_id="session")
+    bubbles = ["なんだと？", "逃げろ！", "ここは俺に任せて", "でも…", "早く行け！"]
+    records = []
+    for index, text in enumerate(bubbles):
+        obs = TextObservation(
+            observation_id=f"bubble-{index}",
+            source_kind=SourceKind.BROWSER,
+            source_instance="connect:manatan:ワンピース",
+            raw_text=text,
+            captured_at_utc=NOW,
+            emitted_at_utc=NOW,
+            received_at_utc=NOW,
+            received_monotonic_ns=1,
+            metadata={"scene": "ワンピース"},
+        )
+        result = state.ingest(obs, now=NOW)
+        assert result.ack.status is IngressStatus.ACCEPTED
+        records.append(next(e.record for e in result.events if e.record.line_id == result.ack.line_id))
+
+    assert [record.text for record in records] == bubbles
+    assert len({record.line_id for record in records}) == len(bubbles)
+    assert {record.scene for record in records} == {"ワンピース"}
+
+
+def test_a_browser_line_never_merges_into_the_game_line_with_the_same_text():
+    state = TextCoordinatorState(session_id="session")
+    game = TextObservation(
+        observation_id="hook-1",
+        source_kind=SourceKind.TEXTHOOK,
+        source_instance="hook",
+        raw_text="ありがとう",
+        captured_at_utc=NOW,
+        emitted_at_utc=NOW,
+        received_at_utc=NOW,
+        received_monotonic_ns=1,
+        metadata={"scene": "Nekopara"},
+    )
+    video = TextObservation(
+        observation_id="browser-1",
+        source_kind=SourceKind.BROWSER,
+        source_instance="connect:youtube:Vlog",
+        raw_text="ありがとう",
+        captured_at_utc=NOW,
+        emitted_at_utc=NOW,
+        received_at_utc=NOW,
+        received_monotonic_ns=2,
+        metadata={"scene": "Vlog"},
+    )
+    first = state.ingest(game, now=NOW)
+    second = state.ingest(video, now=NOW)
+
+    assert second.ack.status is IngressStatus.ACCEPTED
+    assert second.ack.line_id != first.ack.line_id
+    video_record = next(e.record for e in second.events if e.record.line_id == second.ack.line_id)
+    assert video_record.scene == "Vlog"

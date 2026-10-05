@@ -851,7 +851,8 @@ def _ingest_line_sync(
         )
 
     source_kind = SourceKind.normalize(source, source_display_name)
-    if is_message_rate_limited(source_kind.value):
+    # Browser lines are paced by the extension; a manga page or an offline backlog arrives as a burst.
+    if source_kind is not SourceKind.BROWSER and is_message_rate_limited(source_kind.value):
         return IngressAck(IngressStatus.REJECTED, observation_id, reason="skip spam detected")
 
     current_line_after_regex = apply_text_processing(guarded_line, get_config().text_processing)
@@ -977,9 +978,22 @@ def ingest_text_v2_payload(payload: dict) -> dict[str, object]:
         merge_fragments=bool(payload.get("merge_fragments", payload.get("mergeFragments", False))),
         wait_projected=False,
         source_sequence=payload.get("source_sequence", payload.get("sourceSequence")),
-        metadata_extra={key: payload[key] for key in ("hookId", "hookFunction", "engine", "exeName") if key in payload},
+        metadata_extra=_ingress_metadata(payload),
+        skip_overlay=bool(payload.get("skip_overlay", False)),
     )
     return ack.to_dict()
+
+
+def _ingress_metadata(payload: dict) -> dict:
+    metadata = {key: payload[key] for key in ("hookId", "hookFunction", "engine", "exeName") if key in payload}
+    title = str(payload.get("title") or "").strip()[:200]
+    if title:
+        # Lines from outside the game (a video, an anime, a manga) are filed under their own title.
+        metadata["scene"] = title
+    url = str(payload.get("url") or "").strip()[:500]
+    if url:
+        metadata["url"] = url
+    return metadata
 
 
 def _line_from_record(record: TextRecordSnapshot) -> GameLine:

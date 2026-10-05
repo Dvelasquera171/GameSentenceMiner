@@ -54,3 +54,6 @@ def register_routes() -> None:
     from GameSentenceMiner.web.ask_api import register_ask_routes
 
     register_ask_routes(app)
+    from GameSentenceMiner.web.connect_api import register_connect_routes
+
+    register_connect_routes(app)

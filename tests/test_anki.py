@@ -3105,3 +3105,26 @@ def test_get_last_anki_card_and_get_cards_by_sentence(monkeypatch):
 
     assert anki.get_last_anki_card() == {"noteId": 1}
     assert anki.get_cards_by_sentence("a b c") == {"noteId": 2}
+
+
+def test_card_from_a_browser_line_keeps_its_media(monkeypatch):
+    config = _base_config()
+    monkeypatch.setattr(anki, "get_config", lambda: config)
+    monkeypatch.setattr(anki.gsm_state, "dialog_manager", None)
+    fields = {"Word": "語", "Sentence": "字幕の例文", "SentenceAudio": "", "Picture": ""}
+    card = SimpleNamespace(
+        noteId=42, tags=[], modelName="Lapis", fields=fields, get_field=lambda name: fields.get(name, "")
+    )
+    browser_line = SimpleNamespace(id="video-line", text="字幕の例文", source="browser", scene="Frieren")
+    monkeypatch.setattr(anki, "_resolve_mined_line_for_card", lambda *_args: browser_line)
+    queued = []
+    monkeypatch.setattr(anki, "queue_card_for_processing", lambda *args, **_kwargs: queued.append(args))
+    processing = []
+    monkeypatch.setattr(anki.gsm_status, "add_word_being_processed", processing.append)
+    monkeypatch.setattr(anki.gsm_status, "remove_word_being_processed", processing.remove)
+
+    anki.update_single_card(card)
+
+    assert queued == []
+    assert processing == []
+    assert not hasattr(browser_line, "mined_time")

@@ -286,6 +286,9 @@ continuous OCR by default; hotkeys should avoid Ctrl/Shift/Alt (numpad proposed)
 | Review page: Lines / Delete lines / Remove mark per session | `331fc7b8` |
 | Wizard: never switches to OCR by accident; hooked games get OCR on demand | `8ea7fb56` |
 | Reading session and Anki start/stop with the active game (Home tab switches) | `b04d3b01` |
+| Ask AI: custom questions may use general language knowledge (readings of names, grammar) | `7c3c1284` |
+| Home tab **Play**: starts a set-up game (OBS scene + its saved hook/OCR/overlay; Steam games via Steam) | `c4f3bd79` |
+| Numpad layout for GSM, OCR and overlay hotkeys (one-time migration); **Num8** starts/ends a reading session | `cf3b4147` |
 
 Data: all lines deleted on request (210 lines, 3 games); backup first at
 `%APPDATA%\GameSentenceMiner\backup\gsm_backup_20261004_151249.db`.
@@ -304,9 +307,34 @@ Overlay Yomitan: synced from the Firefox export (5 dictionaries, all 3 card form
    that time. Lines shows them; Generate review works on it.
 6. `localhost:55000/setup-check`: "Text source" says the built-in hook, OCR on demand.
 
+### Hotkeys (numpad, NumLock on) — `cf3b4147`
+| Key | Action | Where |
+|---|---|---|
+| Num0 | Ask AI about the current line | overlay |
+| Num1 | OCR the dialogue area once | GSM OCR |
+| Num2 | OCR: draw a box | GSM OCR |
+| Num3 | Replay the last voice line | GSM |
+| Num4 | TextFeed | overlay |
+| Num5 | Show/hide the overlay box | overlay |
+| Num6 | Translate | overlay |
+| Num7 | Furigana | overlay |
+| Num8 | Reading session start/end (toast over the game) | overlay → GSM |
+| Num9 | Pause text capture | GSM |
+| Num/ | Overlay settings | overlay |
+| Num* | Yomitan settings | overlay |
+| Num- | Live stats | overlay |
+| Num+ | spare | |
+
+Migration runs once per app (`numpad_layout_applied`, `ocrNumpadHotkeysApplied`,
+`numpadHotkeysApplied`) and only moves hotkeys still at an old default. The overlay migrates on
+its next start. New route: `POST /api/review/sessions/toggle` (adds no table).
+GSM settings window: Qt calls keypad 3 "Num+3"; the hotkey fields convert to and from `num3`, so
+opening settings no longer saves numpad hotkeys as empty, and pressing a numpad key records it.
+
 ### Still open (next)
 - Wizard first question "What kind of game is it?" (VN → hook + OCR on demand; can't-hook → OCR).
-- Numpad layout for all hotkeys (proposal in chat: Num0 AI, Num1 OCR area, Num2 OCR box, …);
-  the GSM OCR hotkeys are still Ctrl+Shift+M/O/W. Needs the owner's OK on the layout.
+- Numpad hotkeys with "Route all hotkeys through input server" on: the Rust input server does
+  not parse `num0`… yet (off by default).
+- Optional: numpad hotkeys only while the game has focus (they are global now).
 - Plain explanations in the GSM app (app vs web pages, sessions) and overlay settings window not
   opening on every start.

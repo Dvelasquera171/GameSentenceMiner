@@ -10,7 +10,7 @@ import threading
 import time
 import webbrowser
 from PyQt6.QtCore import Qt, QSignalBlocker, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QIcon, QKeySequence
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -51,6 +51,7 @@ from GameSentenceMiner.ui import window_state_manager, WindowId
 from GameSentenceMiner.ui.config.anki_setup import offer_recommended_field_mappings
 from GameSentenceMiner.ui.config.binding import BindingManager, ValueTransform
 from GameSentenceMiner.ui.config.editor import ConfigEditor
+from GameSentenceMiner.ui.config.hotkey_text import hotkey_from_key_sequence, key_sequence_from_hotkey
 from GameSentenceMiner.ui.config.i18n import load_localization
 from GameSentenceMiner.ui.config.search import ConfigSearchController, SearchLineEdit
 from GameSentenceMiner.ui.config.labels import LabelColor, build_label
@@ -1006,18 +1007,18 @@ class ConfigWindow(QWidget):
                     disable_desktop_audio_on_connect=self.obs_disable_desktop_audio_on_connect_check.isChecked(),
                 ),
                 hotkeys=Hotkeys(
-                    manual_overlay_scan=self.manual_overlay_scan_hotkey_edit.keySequence().toString(),
+                    manual_overlay_scan=hotkey_from_key_sequence(self.manual_overlay_scan_hotkey_edit.keySequence()),
                     manual_overlay_scan_gamepad=str(self.manual_overlay_scan_gamepad_combo.currentData() or ""),
-                    copy_game_screenshot=self.copy_game_screenshot_hotkey_edit.keySequence().toString(),
+                    copy_game_screenshot=hotkey_from_key_sequence(self.copy_game_screenshot_hotkey_edit.keySequence()),
                     copy_game_screenshot_gamepad=str(self.copy_game_screenshot_gamepad_combo.currentData() or ""),
-                    play_latest_audio=self.play_latest_audio_hotkey_edit.keySequence().toString(),
+                    play_latest_audio=hotkey_from_key_sequence(self.play_latest_audio_hotkey_edit.keySequence()),
                     play_latest_audio_gamepad=str(self.play_latest_audio_gamepad_combo.currentData() or ""),
-                    mute_target_window=self.mute_target_window_hotkey_edit.keySequence().toString(),
+                    mute_target_window=hotkey_from_key_sequence(self.mute_target_window_hotkey_edit.keySequence()),
                     mute_target_window_gamepad=str(self.mute_target_window_gamepad_combo.currentData() or ""),
                     unmute_target_window_on_focus=self.unmute_target_window_on_focus_check.isChecked(),
-                    process_pause=self.process_pause_hotkey_edit.keySequence().toString(),
+                    process_pause=hotkey_from_key_sequence(self.process_pause_hotkey_edit.keySequence()),
                     process_pause_gamepad=str(self.process_pause_gamepad_combo.currentData() or ""),
-                    pause_text_intake=self.pause_text_intake_hotkey_edit.keySequence().toString(),
+                    pause_text_intake=hotkey_from_key_sequence(self.pause_text_intake_hotkey_edit.keySequence()),
                     pause_text_intake_gamepad=str(self.pause_text_intake_gamepad_combo.currentData() or ""),
                     relay_outputs_when_text_intake_paused=(
                         self.relay_outputs_when_text_intake_paused_check.isChecked()
@@ -3509,13 +3510,15 @@ class ConfigWindow(QWidget):
         # self.number_of_local_scans_per_event_edit.setText(str(s.overlay.number_of_local_scans_per_event))
         overlay_minimum_character_size = get_overlay_minimum_character_size(default=s.overlay.minimum_character_size)
         self.overlay_minimum_character_size_edit.setText(str(overlay_minimum_character_size))
-        self.manual_overlay_scan_hotkey_edit.setKeySequence(QKeySequence(s.hotkeys.manual_overlay_scan or ""))
+        self.manual_overlay_scan_hotkey_edit.setKeySequence(
+            key_sequence_from_hotkey(s.hotkeys.manual_overlay_scan or "")
+        )
         self._set_gamepad_hotkey_combo(
             self.manual_overlay_scan_gamepad_combo,
             getattr(s.hotkeys, "manual_overlay_scan_gamepad", ""),
         )
         self.copy_game_screenshot_hotkey_edit.setKeySequence(
-            QKeySequence(getattr(s.hotkeys, "copy_game_screenshot", "f8") or "")
+            key_sequence_from_hotkey(getattr(s.hotkeys, "copy_game_screenshot", "f8") or "")
         )
         self._set_gamepad_hotkey_combo(
             self.copy_game_screenshot_gamepad_combo,
@@ -3542,7 +3545,7 @@ class ConfigWindow(QWidget):
         self.check_previous_lines_for_recycled_indicator_check.setChecked(
             bool(getattr(s.overlay, "check_previous_lines_for_recycled_indicator", True))
         )
-        self.pause_text_intake_hotkey_edit.setKeySequence(QKeySequence(s.hotkeys.pause_text_intake or ""))
+        self.pause_text_intake_hotkey_edit.setKeySequence(key_sequence_from_hotkey(s.hotkeys.pause_text_intake or ""))
         self._set_gamepad_hotkey_combo(
             self.pause_text_intake_gamepad_combo,
             getattr(s.hotkeys, "pause_text_intake_gamepad", ""),
@@ -3594,7 +3597,7 @@ class ConfigWindow(QWidget):
             self.process_pausing_linux_target_process_edit,
             getattr(process_cfg, "linux_target_process", ""),
         )
-        self.process_pause_hotkey_edit.setKeySequence(QKeySequence(s.hotkeys.process_pause or ""))
+        self.process_pause_hotkey_edit.setKeySequence(key_sequence_from_hotkey(s.hotkeys.process_pause or ""))
         self._set_gamepad_hotkey_combo(
             self.process_pause_gamepad_combo,
             getattr(s.hotkeys, "process_pause_gamepad", ""),
@@ -3603,13 +3606,13 @@ class ConfigWindow(QWidget):
         # Advanced
         self._set_text_value(self.audio_player_path_edit, s.advanced.audio_player_path)
         self._set_text_value(self.video_player_path_edit, s.advanced.video_player_path)
-        self.play_latest_audio_hotkey_edit.setKeySequence(QKeySequence(s.hotkeys.play_latest_audio or ""))
+        self.play_latest_audio_hotkey_edit.setKeySequence(key_sequence_from_hotkey(s.hotkeys.play_latest_audio or ""))
         self._set_gamepad_hotkey_combo(
             self.play_latest_audio_gamepad_combo,
             getattr(s.hotkeys, "play_latest_audio_gamepad", ""),
         )
         self.mute_target_window_hotkey_edit.setKeySequence(
-            QKeySequence(getattr(s.hotkeys, "mute_target_window", "") or "")
+            key_sequence_from_hotkey(getattr(s.hotkeys, "mute_target_window", "") or "")
         )
         self._set_gamepad_hotkey_combo(
             self.mute_target_window_gamepad_combo,

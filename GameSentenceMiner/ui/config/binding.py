@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import QSignalBlocker
-from PyQt6.QtGui import QKeySequence
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -15,6 +14,7 @@ from PyQt6.QtWidgets import (
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Tuple, Type
 
+from .hotkey_text import hotkey_from_key_sequence, key_sequence_from_hotkey
 from .safety import safe_config_callback, safe_config_methods
 
 Path = Tuple[str, ...]
@@ -65,8 +65,8 @@ ADAPTERS: Dict[Type[QWidget], WidgetAdapter] = {
         connect=lambda w, cb: _connect_signal(w.textChanged, cb),
     ),
     QKeySequenceEdit: WidgetAdapter(
-        get=lambda w: w.keySequence().toString(),
-        set=lambda w, v: w.setKeySequence(QKeySequence("" if v is None else str(v))),
+        get=lambda w: hotkey_from_key_sequence(w.keySequence()),
+        set=lambda w, v: w.setKeySequence(key_sequence_from_hotkey(v)),
         connect=lambda w, cb: _connect_signal(w.keySequenceChanged, cb),
     ),
     QListWidget: WidgetAdapter(

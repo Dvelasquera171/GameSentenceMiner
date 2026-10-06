@@ -21,7 +21,8 @@ const invokeExactChannels = new Set<string>([
   "run-furigana-window",
   "get_gsm_status",
   "ocr-replacements.load",
-  "ocr-replacements.save"
+  "ocr-replacements.save",
+  "openGsmWebPage"
 ]);
 
 const sendExactChannels = new Set<string>([
@@ -75,6 +76,7 @@ const invokePrefixes = [
   "vn.",
   "yuzu.",
   "front.",
+  "game.",
   "texthook.",
   "textprocess.",
   "speech-recognition.",

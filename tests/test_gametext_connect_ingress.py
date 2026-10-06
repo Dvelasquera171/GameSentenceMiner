@@ -81,3 +81,26 @@ def test_anki_recognizes_the_browser_source_by_name():
         if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "BROWSER_LINE_SOURCE" for t in node.targets)
     ]
     assert values == [SourceKind.BROWSER.value]
+
+
+@pytest.mark.parametrize(
+    ("language", "text", "is_line"),
+    [
+        ("ja", "about:debugging#/runtime/this-firefox", False),
+        ("ja", "D:\Projects\GameSentenceMiner", False),
+        ("ja", "AAAAAAAAFpcuAS7CHvqHZuzyVtAC3i3-vygEL5BViMdDDb4jEnPmJmKfWw", False),
+        ("ja", "Kitsunekko", False),
+        ("ja", "やっと会えたね", True),
+        ("ja", "ＯＫ、行こう", True),
+        ("ja", "ｶﾀｶﾅ", True),
+        ("zh", "你好", True),
+        ("zh", "hello", False),
+        ("ko", "안녕하세요", True),
+        ("en", "plain English line", True),
+    ],
+)
+def test_clipboard_only_takes_text_in_the_target_language(monkeypatch, language, text, is_line):
+    monkeypatch.setattr(
+        gametext, "get_config", lambda: SimpleNamespace(general=SimpleNamespace(target_language=language))
+    )
+    assert gametext.clipboard_text_is_a_line(text) is is_line

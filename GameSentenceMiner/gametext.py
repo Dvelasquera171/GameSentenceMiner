@@ -2,6 +2,7 @@ import asyncio
 import atexit
 import json
 import os
+import re
 import threading
 import time
 import uuid
@@ -409,6 +410,21 @@ def should_pause_clipboard_for_other_source() -> bool:
 # ---------------------------------------------------------------------------
 
 
+# Scripts a line in these target languages contains; anything copied without them (URLs, paths,
+# keys, file names) is not a game line.
+_TARGET_SCRIPTS = {
+    "ja": re.compile(r"[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]"),
+    "zh": re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]"),
+    "ko": re.compile(r"[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]"),
+}
+
+
+def clipboard_text_is_a_line(text: str) -> bool:
+    language = str(getattr(get_config().general, "target_language", "") or "").lower().split("-")[0]
+    script = _TARGET_SCRIPTS.get(language)
+    return script is None or bool(script.search(text or ""))
+
+
 async def monitor_clipboard():
     global current_line, last_clipboard
     if not pyperclip:
@@ -479,6 +495,10 @@ async def monitor_clipboard():
             # handled centrally in handle_new_text_event.
             if current_clipboard and current_clipboard != last_clipboard:
                 last_clipboard = current_clipboard
+                if not clipboard_text_is_a_line(current_clipboard):
+                    # Not logged: copied keys and passwords must not end up in the logs.
+                    logger.debug("Clipboard text is not in the target language; ignored.")
+                    continue
                 await handle_new_text_event(
                     current_clipboard,
                     line_time=datetime.now(),

@@ -15,17 +15,40 @@ test("furigana is left out of the line", () => {
   assert.equal(core.textWithoutRuby(d.getElementById("x")), "葬送のフリーレン");
 });
 
-test("asbplayer: the first subtitle file is read, its list rows and offset notices are not", () => {
+test("asbplayer (released markup): the first subtitle file on the video is read", () => {
+  // v1.21: spans carry only data-track, inside the overlay container.
   const d = doc(`
     <div class="asbplayer-subtitles-container-bottom"><div class="asbplayer-subtitles">
-      <span data-track="0" data-asb-subtitle-index="12">魔法は<ruby>好<rt>す</rt></ruby>きか</span>
-      <span data-track="1" data-asb-subtitle-index="40">Do you like magic?</span>
-      <span data-track="0">+0.5s</span>
-    </div></div>
-    <table><tr data-asb-subtitle-index="13"><td><span data-track="0" data-asb-subtitle-index="13">次の行</span></td></tr></table>`);
+      <span data-track="0" class="asbplayer-subtitle">魔法は<ruby>好<rt>す</rt></ruby>きか</span>
+      <span data-track="1">Do you like magic?</span>
+      <span data-track="0">+500 ms</span>
+    </div></div>`);
   assert.equal(core.readAsbplayer(d), "魔法は好きか");
   assert.equal(core.readAsbplayer(d, "1"), "Do you like magic?");
   assert.equal(core.readAsbplayer(d, "all"), "魔法は好きか\nDo you like magic?");
+});
+
+test("asbplayer (newer markup) and its fullscreen container are read", () => {
+  const d = doc(`
+    <div class="asbplayer-subtitles-container-top"><div class="asbplayer-fullscreen-subtitles">
+      <span data-track="0" data-asb-subtitle-index="12">上の字幕</span>
+    </div></div>`);
+  assert.equal(core.readAsbplayer(d), "上の字幕");
+  assert.equal(core.readAsbplayer(doc(`<span data-track="0" data-asb-subtitle-index="3">索引つき</span>`)), "索引つき");
+});
+
+test("asbplayer's subtitle list is never read, on its own page either", () => {
+  const list = `<table><tr data-track="0"><td><span data-track="0">次の行</span></td></tr></table>`;
+  assert.equal(core.readAsbplayer(doc(list), "0", { asbplayerPage: true }), "");
+  // Its own player (local files) draws bare spans; those count only on asbplayer's page.
+  const player = `<div><span data-track="0" class="subtitle">ローカルの字幕</span></div>`;
+  assert.equal(core.readAsbplayer(doc(player), "0", { asbplayerPage: true }), "ローカルの字幕");
+  assert.equal(core.readAsbplayer(doc(player)), "");
+});
+
+test("analytics data-track attributes on ordinary sites are not subtitles", () => {
+  const d = doc(`<span data-track="click_signup">Sign up</span><span data-track="0">Menu</span><video></video>`);
+  assert.equal(core.readAsbplayer(d), "");
 });
 
 test("YouTube captions, Manatan anime and Netflix are read from their own elements", () => {
@@ -37,7 +60,7 @@ test("YouTube captions, Manatan anime and Netflix are read from their own elemen
 
 test("subtitles loaded in asbplayer win over the site's own captions", () => {
   const d = doc(`
-    <span data-track="0" data-asb-subtitle-index="1">日本語の字幕</span>
+    <div class="asbplayer-subtitles-container-bottom"><span data-track="0">日本語の字幕</span></div>
     <div class="ytp-caption-window-container"><span class="ytp-caption-segment">auto caption</span></div>`);
   assert.deepEqual(core.readSubtitle(d), { site: "asbplayer", text: "日本語の字幕" });
   assert.deepEqual(core.readSubtitle(doc("<video></video>")), { site: "", text: "" });

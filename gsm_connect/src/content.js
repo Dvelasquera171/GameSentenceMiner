@@ -8,6 +8,8 @@
   const core = globalThis.GSMConnect;
   const host = location.hostname;
   const isYouTube = /(^|\.)youtube(-nocookie)?\.com$/.test(host);
+  // asbplayer's own player (local video files) draws subtitles without its overlay containers.
+  const asbplayerPage = host === "app.asbplayer.dev" || host === "killergerbah.github.io";
   const POLL_MS = 300;
   const IDLE_POLL_MS = 2000;
   const MUTATION_CHECK_MS = 100;
@@ -72,7 +74,7 @@
   function check() {
     const now = Date.now();
     lastCheck = now;
-    const current = core.readSubtitle(document, { asbplayerTrack });
+    const current = core.readSubtitle(document, { asbplayerTrack, asbplayerPage });
     // A replaced line belongs to the source that showed it, even if the new text is empty.
     const lines = subtitles.observe(current.text, now);
     if (lines.length) send(lines, lastSite || current.site);

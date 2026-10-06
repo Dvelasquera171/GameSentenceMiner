@@ -33,13 +33,21 @@
 
   // --- Subtitle readers: each returns the subtitle on screen now, or "" ----------------------
 
-  // asbplayer (extension overlay and its own player). Its subtitle list uses the same attribute in
-  // table rows, so rows are skipped. Track 0 is the first subtitle file the user loaded.
-  function readAsbplayer(doc, track = "0") {
-    const spans = Array.from(doc.querySelectorAll("span[data-asb-subtitle-index][data-track]")).filter(
-      (span) => !span.closest("table") && (track === "all" || span.dataset.track === track)
-    );
-    return joinTexts(spans);
+  // asbplayer: the subtitle on the video, drawn by its extension in an overlay container, or by
+  // its own player page. Released versions mark lines only with a numeric data-track (newer ones
+  // add data-asb-subtitle-index); data-track alone is common in analytics markup, so a span counts
+  // only inside asbplayer's containers or on asbplayer's own page. Its subtitle list (a table) and
+  // offset notices ("+500 ms") are not lines. Track 0 is the first subtitle file loaded.
+  const ASB_CONTAINERS = ".asbplayer-subtitles-container-bottom, .asbplayer-subtitles-container-top";
+  const ASB_OFFSET_NOTICE = /^[+-]?\d+ ms$/;
+
+  function readAsbplayer(doc, track = "0", { asbplayerPage = false } = {}) {
+    const spans = Array.from(doc.querySelectorAll("span[data-track]")).filter((span) => {
+      if (!/^\d+$/.test(span.dataset.track) || span.closest("table")) return false;
+      if (track !== "all" && span.dataset.track !== track) return false;
+      return asbplayerPage || span.hasAttribute("data-asb-subtitle-index") || span.closest(ASB_CONTAINERS) !== null;
+    });
+    return joinTexts(spans.filter((span) => !ASB_OFFSET_NOTICE.test(span.textContent.trim())));
   }
 
   function readYouTube(doc) {
@@ -79,7 +87,10 @@
   // The first reader with text wins, so subtitles loaded in asbplayer beat the site's own captions.
   function readSubtitle(doc, options = {}) {
     for (const reader of SUBTITLE_READERS) {
-      const text = reader.site === "asbplayer" ? reader.read(doc, options.asbplayerTrack || "0") : reader.read(doc);
+      const text =
+        reader.site === "asbplayer"
+          ? reader.read(doc, options.asbplayerTrack || "0", { asbplayerPage: Boolean(options.asbplayerPage) })
+          : reader.read(doc);
       if (text) return { site: reader.site, text };
     }
     return { site: "", text: "" };

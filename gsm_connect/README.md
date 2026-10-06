@@ -23,15 +23,27 @@ picture; GSM adds nothing from OBS to them.
 **Chrome / Edge**: `chrome://extensions` (or `edge://extensions`) → turn on Developer mode →
 **Load unpacked** → choose this `gsm_connect` folder.
 
-**Firefox**: `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → choose
-`gsm_connect/manifest.json`. Firefox removes temporary add-ons when it closes; for a permanent
-install the extension has to be signed once (free, unlisted) with your addons.mozilla.org API key:
+**Firefox, to try it**: `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** →
+choose `gsm_connect/manifest.json`. Firefox removes temporary add-ons when it closes.
 
-```
-npx web-ext sign --channel=unlisted --source-dir gsm_connect --ignore-files tests package.json README.md --api-key <JWT issuer> --api-secret <JWT secret>
-```
+**Firefox, permanently**: Firefox only keeps signed add-ons. Signing is free and private
+("unlisted": nothing is published on the add-on store):
 
-then open the downloaded `.xpi` in Firefox.
+1. Sign in at [addons.mozilla.org](https://addons.mozilla.org) and open
+   [Manage API Keys](https://addons.mozilla.org/developers/addon/api/key/) → **Generate new
+   credentials**. Keep the two values to yourself.
+2. In PowerShell, from the repo root:
+   ```
+   $env:WEB_EXT_API_KEY = "<JWT issuer>"
+   $env:WEB_EXT_API_SECRET = "<JWT secret>"
+   npm run sign:firefox --prefix gsm_connect
+   ```
+   Mozilla checks it automatically (usually a few minutes); the signed `.xpi` lands in
+   `dist/gsm_connect/`.
+3. Drag the `.xpi` onto a Firefox window → **Add**. Then remove the temporary copy from
+   `about:debugging`.
+
+Each new version must be signed again with a higher `version` in `manifest.json`.
 
 ## Use
 

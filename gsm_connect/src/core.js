@@ -40,6 +40,12 @@
   // offset notices ("+500 ms") are not lines. Track 0 is the first subtitle file loaded.
   const ASB_CONTAINERS = ".asbplayer-subtitles-container-bottom, .asbplayer-subtitles-container-top";
   const ASB_OFFSET_NOTICE = /^[+-]?\d+ ms$/;
+  // For a second after loading, asbplayer shows the subtitle file names where subtitles go.
+  const SUBTITLE_FILE_NAME = /\.(?:srt|ass|ssa|vtt|sub|sup|ttml|dfxp|smi|lrc|ytsrv3|json3?|txt)$/i;
+
+  function isAsbplayerNotice(line) {
+    return ASB_OFFSET_NOTICE.test(line) || SUBTITLE_FILE_NAME.test(line);
+  }
 
   function readAsbplayer(doc, track = "0", { asbplayerPage = false } = {}) {
     const spans = Array.from(doc.querySelectorAll("span[data-track]")).filter((span) => {
@@ -47,7 +53,10 @@
       if (track !== "all" && span.dataset.track !== track) return false;
       return asbplayerPage || span.hasAttribute("data-asb-subtitle-index") || span.closest(ASB_CONTAINERS) !== null;
     });
-    return joinTexts(spans.filter((span) => !ASB_OFFSET_NOTICE.test(span.textContent.trim())));
+    return joinTexts(spans)
+      .split("\n")
+      .filter((line) => !isAsbplayerNotice(line))
+      .join("\n");
   }
 
   function readYouTube(doc) {

@@ -28,6 +28,16 @@ test("asbplayer (released markup): the first subtitle file on the video is read"
   assert.equal(core.readAsbplayer(d, "all"), "魔法は好きか\nDo you like magic?");
 });
 
+test("asbplayer's loaded-subtitles message (file names, offset) is not a line", () => {
+  const loaded = doc(`
+    <div class="asbplayer-subtitles-container-bottom"><div class="asbplayer-subtitles">
+      <span data-track="0">[DB]Azumanga_Daiou_-_01_(Dual_Audio).mkv - あずまんが大王 S01E01 [WhisperAI][v1].srt<br>episode01.ja.ass<br>-1200 ms</span>
+    </div></div>`);
+  assert.equal(core.readAsbplayer(loaded), "");
+  const line = doc(`<div class="asbplayer-subtitles-container-bottom"><span data-track="0">字幕ファイル.srtって何？</span></div>`);
+  assert.equal(core.readAsbplayer(line), "字幕ファイル.srtって何？");
+});
+
 test("asbplayer (newer markup) and its fullscreen container are read", () => {
   const d = doc(`
     <div class="asbplayer-subtitles-container-top"><div class="asbplayer-fullscreen-subtitles">

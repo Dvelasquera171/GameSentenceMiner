@@ -21,17 +21,22 @@
             <label for="datePresets" class="dashboard-presets-label">Quick ranges</label>
             <select id="datePresets" class="dashboard-presets-select" aria-label="Quick date ranges">
                 <option value="" selected>Quick ranges…</option>
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="week">Current Week</option>
-                <option value="month">Current Month</option>
-                <option value="year">Current Year</option>
-                <option value="lastWeek">Last Week</option>
-                <option value="lastMonth">Last Month</option>
-                <option value="lastYear">Last Year</option>
-                <option value="7days">Last 7 Days</option>
-                <option value="30days">Last 30 Days</option>
-                <option value="365days">Last 365 Days</option>
+                <optgroup label="Past">
+                    <option value="7days">Past week</option>
+                    <option value="pastMonth">Past month</option>
+                    <option value="past6Months">Past 6 months</option>
+                    <option value="pastYear">Past year</option>
+                </optgroup>
+                <optgroup label="Calendar">
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="week">This week</option>
+                    <option value="lastWeek">Last week</option>
+                    <option value="month">This month</option>
+                    <option value="lastMonth">Last month</option>
+                    <option value="year">This year</option>
+                    <option value="lastYear">Last year</option>
+                </optgroup>
             </select>
         </div>
     </div>
@@ -61,6 +66,18 @@
             d.setDate(d.getDate() + diff);
             d.setHours(0, 0, 0, 0);
             return d;
+        }
+
+        // Rolling range ending today: "past month" on Oct 5 is Sep 6 - Oct 5.
+        function setPast(months) {
+            var end = new Date();
+            var start = new Date(end.getFullYear(), end.getMonth() - months, 1);
+            var lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+            start.setDate(Math.min(end.getDate(), lastDay) + 1);
+            fromInput.value = toISODate(start);
+            toInput.value = toISODate(end);
+            fromInput.dispatchEvent(new Event('change'));
+            toInput.dispatchEvent(new Event('change'));
         }
 
         var handlers = {
@@ -143,6 +160,9 @@
                 fromInput.dispatchEvent(new Event('change'));
                 toInput.dispatchEvent(new Event('change'));
             },
+            pastMonth: function () { setPast(1); },
+            past6Months: function () { setPast(6); },
+            pastYear: function () { setPast(12); },
             '30days': function () {
                 var end = new Date();
                 var start = new Date(); start.setDate(end.getDate() - 29);

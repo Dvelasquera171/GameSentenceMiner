@@ -361,6 +361,17 @@ browser to GSM; GSM files each line under its own title. See `gsm_connect/README
   GSM (asbplayer lines, background-tab timing, manga pages, titles). Not yet tried on the real
   YouTube / asbplayer / Manatan sites.
 
+### Review grading after the owner's first real review (2026-10-05)
+Owner graded an Azumanga Daioh session (WhisperAI subtitles). Problems seen and fixed:
+- The grader saw only the quoted line, so it invented feelings (自己嫌悪); it now gets 3 lines of
+  context on each side.
+- Transcription errors (聞いたね for 聞いてね) were silently "corrected" and the learner marked
+  down; graders now say the line looks mis-transcribed and do not penalize; quizzes avoid such lines.
+- ✎ fixes rewrote the answer's content; now only real wording problems in the learner's own words.
+- A question inside an answer was ignored; it is now answered ("質問への回答").
+- Score and verdict disagreed (不正解 vs partial); scores are kept inside the verdict's band.
+- New 質問・異議 box per grade: the AI replies and may revise the grade (original kept).
+
 ### Owner test (GSM Connect, about 10 minutes)
 1. Load `gsm_connect` as an extension (README: Chrome/Edge unpacked, or Firefox temporary add-on).
 2. YouTube: a Japanese video with Japanese CC on. The popup says "Reading YouTube captions"; the

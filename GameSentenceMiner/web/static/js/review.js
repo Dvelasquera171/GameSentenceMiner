@@ -256,18 +256,66 @@
             : '';
     }
 
-    function gradeHtml(g, q) {
+    function gradeHtml(g, q, attemptId) {
         const fixes = (g.japanese_fixes || []).map((f) => `
             <div lang="ja">✎ <span class="rv-wrong">${esc(f.original)}</span> → <span class="rv-right">${esc(f.fixed)}</span></div>
-            ${f.note_en ? `<details><summary>English</summary>${esc(f.note_en)}</details>` : ''}`).join('');
+            ${f.note_en ? `<details><summary>Why (English)</summary>${esc(f.note_en)}</details>` : ''}`).join('');
+        const original = g.original ? ` <span class="rv-muted">（元: ${esc(VERDICT_LABELS[g.original.verdict] || g.original.verdict)} ${esc(g.original.score)}点）</span>` : '';
+        const reply = g.reply_ja ? `
+            <div class="rv-reply"><div class="rv-muted">質問への回答</div>
+                <div class="rv-ja" lang="ja">${esc(g.reply_ja)}</div>
+                ${g.reply_en ? `<details><summary>English</summary>${esc(g.reply_en)}</details>` : ''}</div>` : '';
+        const thread = (g.discussion || []).map((d) => `
+            <div class="rv-reply">
+                <div class="rv-muted">あなた</div><div class="rv-ja" lang="ja">${esc(d.message)}</div>
+                <div class="rv-muted" style="margin-top:4px;">AI${d.revised ? ` · 採点を変更: ${esc(VERDICT_LABELS[d.revised.verdict] || d.revised.verdict)} ${esc(d.revised.score)}点` : ''}</div>
+                <div class="rv-ja" lang="ja">${esc(d.reply_ja)}</div>
+                ${d.reply_en ? `<details><summary>English</summary>${esc(d.reply_en)}</details>` : ''}
+            </div>`).join('');
+        const discuss = attemptId ? `
+            <details class="rv-discuss"><summary>質問・異議</summary>
+                <textarea lang="ja" rows="2" placeholder="採点への質問や異議、文法の質問など（日本語でも英語でも）"></textarea>
+                <div class="rv-row" style="margin-top:6px;"><button class="control-btn discussBtn" data-attempt="${esc(attemptId)}">送る</button><span class="discussBusy rv-muted"></span></div>
+            </details>` : '';
         return `
-            <div><span class="rv-pill ${esc(g.verdict)}">${esc(VERDICT_LABELS[g.verdict] || g.verdict)}</span> <span class="rv-score">${esc(g.score)}点</span></div>
+            <div><span class="rv-pill ${esc(g.verdict)}">${esc(VERDICT_LABELS[g.verdict] || g.verdict)}</span> <span class="rv-score">${esc(g.score)}点</span>${original}</div>
             <div class="rv-ja" lang="ja" style="margin-top:6px;">${esc(g.feedback_ja)}</div>
-            ${fixes}
-            <details><summary>English</summary>${esc(g.feedback_en)}</details>
+            <details><summary>Feedback in English</summary>${esc(g.feedback_en)}</details>
+            ${fixes ? `<div class="rv-muted" style="margin-top:6px;">日本語の直し</div>${fixes}` : ''}
+            ${reply}
             <details><summary>模範解答</summary><div class="rv-ja" lang="ja">${esc(g.model_answer_ja)}</div></details>
             ${q && q.reference_answer_ja ? `<details><summary>参考解答</summary><div class="rv-ja" lang="ja">${esc(q.reference_answer_ja)}</div>
-                ${q.reference_answer_en ? `<details><summary>English</summary>${esc(q.reference_answer_en)}</details>` : ''}</details>` : ''}`;
+                ${q.reference_answer_en ? `<details><summary>English</summary>${esc(q.reference_answer_en)}</details>` : ''}</details>` : ''}
+            ${thread}
+            ${discuss}`;
+    }
+
+    function wireDiscuss(card, q) {
+        const button = card.querySelector('.discussBtn');
+        if (!button) return;
+        button.onclick = async () => {
+            const box = card.querySelector('.rv-discuss textarea');
+            const busy = card.querySelector('.discussBusy');
+            const message = box.value.trim();
+            if (!message || button.disabled) return;
+            const reviewId = state.reviewId;
+            const attemptId = Number(button.dataset.attempt);
+            button.disabled = true;
+            busy.innerHTML = '<span class="rv-spinner"></span> 考え中…';
+            try {
+                const { grade: g } = await api(`/api/review/reviews/${reviewId}/attempts/${attemptId}/discuss`, { method: 'POST', body: JSON.stringify({ message }) });
+                if (state.reviewId !== reviewId) return;
+                const attempt = state.attempts.find((a) => a.id === attemptId);
+                if (attempt) attempt.grade = g;
+                card.querySelector('.gradeResult').innerHTML = `<div class="rv-grade">${gradeHtml(g, q, attemptId)}</div>`;
+                card.querySelector('.gradeHistory').innerHTML = historyHtml(card.dataset.qid);
+                wireDiscuss(card, q);
+                renderScore(state.review);
+            } catch (err) {
+                button.disabled = false;
+                showError(busy, err);
+            }
+        };
     }
 
     function historyHtml(qid) {
@@ -293,12 +341,13 @@
                     <button class="control-btn gradeBtn">採点</button>
                     <span class="gradeBusy rv-muted"></span>
                 </div>
-                <div class="gradeResult">${last ? `<div class="rv-grade">${gradeHtml(last.grade || {}, q)}</div>` : ''}</div>
+                <div class="gradeResult">${last ? `<div class="rv-grade">${gradeHtml(last.grade || {}, q, last.id)}</div>` : ''}</div>
                 <div class="gradeHistory">${historyHtml(q.id)}</div>
             </div>`;
         }).join('') : '<p class="rv-muted">No quiz questions.</p>';
         $('quizList').querySelectorAll('.rv-quiz').forEach((card) => {
             card.querySelector('.gradeBtn').onclick = () => grade(card);
+            wireDiscuss(card, quiz.find((x) => String(x.id) === card.dataset.qid));
             card.querySelector('textarea').addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.isComposing) { e.preventDefault(); grade(card); }
             });
@@ -320,8 +369,9 @@
             const { grade: g, attempt_id } = await api(`/api/review/reviews/${reviewId}/grade`, { method: 'POST', body: JSON.stringify({ question_id: card.dataset.qid, answer }) });
             if (state.reviewId !== reviewId) return;
             state.attempts.push({ id: attempt_id, question_id: card.dataset.qid, answer, grade: g, created_at: Date.now() / 1000 });
-            out.innerHTML = `<div class="rv-grade">${gradeHtml(g, q)}</div>`;
+            out.innerHTML = `<div class="rv-grade">${gradeHtml(g, q, attempt_id)}</div>`;
             card.querySelector('.gradeHistory').innerHTML = historyHtml(card.dataset.qid);
+            wireDiscuss(card, q);
             renderScore(state.review);
         } catch (err) {
             showError(out, err);

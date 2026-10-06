@@ -96,6 +96,9 @@ class QuizGrade:
     feedback_en: str = ""
     japanese_fixes: List[dict] = field(default_factory=list)
     model_answer_ja: str = ""
+    # Answer to a question the learner asked inside their answer ("explain the grammar of …").
+    reply_ja: str = ""
+    reply_en: str = ""
 
 
 @dataclass
@@ -273,6 +276,34 @@ def _question_from_dict(data: dict, fallback_id: str) -> Optional[QuizQuestion]:
 # ---------------------------------------------------------------------------
 
 
+SCORE_BANDS = {"correct": (80, 100), "partial": (30, 79), "incorrect": (0, 29)}
+
+
+def _verdict_and_score(data: dict) -> tuple[str, int]:
+    """Keep the score inside its verdict's band, so 不正解 never shows 60点."""
+    verdict = str(data.get("verdict") or "").lower()
+    if verdict not in SCORE_BANDS:
+        verdict = "partial"
+    try:
+        score = int(round(float(data.get("score", 0))))
+    except (TypeError, ValueError):
+        score = 0
+    low, high = SCORE_BANDS[verdict]
+    return verdict, max(low, min(high, score))
+
+
+def _wording_fixes(raw, answer: str) -> List[dict]:
+    """Keep fixes that quote words the learner actually wrote and change them."""
+    fixes = []
+    for fix in _as_list(raw):
+        if not isinstance(fix, dict):
+            continue
+        original, fixed = str(fix.get("original") or "").strip(), str(fix.get("fixed") or "").strip()
+        if original and fixed and original != fixed and original in answer:
+            fixes.append(fix)
+    return fixes
+
+
 class SessionReviewGenerator:
     def __init__(
         self, ai_service, native_language: str = "English", logger=None, chunk_chars: int = DEFAULT_CHUNK_CHARS
@@ -396,21 +427,61 @@ class SessionReviewGenerator:
             ),
         )
         data = self._call(prompt, "session_review_grade", GRADE_MAX_TOKENS)
-        verdict = str(data.get("verdict") or "").lower()
-        if verdict not in {"correct", "partial", "incorrect"}:
-            verdict = "partial"
-        try:
-            score = int(round(float(data.get("score", 0))))
-        except (TypeError, ValueError):
-            score = 0
+        verdict, score = _verdict_and_score(data)
         return QuizGrade(
             verdict=verdict,
-            score=max(0, min(100, score)),
+            score=score,
             feedback_ja=str(data.get("feedback_ja") or ""),
             feedback_en=str(data.get("feedback_en") or ""),
-            japanese_fixes=[f for f in _as_list(data.get("japanese_fixes")) if isinstance(f, dict)],
+            japanese_fixes=_wording_fixes(data.get("japanese_fixes"), answer),
             model_answer_ja=str(data.get("model_answer_ja") or ""),
+            reply_ja=str(data.get("reply_ja") or ""),
+            reply_en=str(data.get("reply_en") or ""),
         )
+
+    def discuss_grade(
+        self,
+        question: QuizQuestion,
+        answer: str,
+        grade: dict,
+        history: Sequence[dict],
+        message: str,
+        source_lines: Sequence[ReviewLine],
+        game_title: str,
+    ) -> dict:
+        """The learner questions a grade; returns {reply_ja, reply_en, revised: {...} | None}."""
+        if not message or not message.strip():
+            raise ValueError("Write your question or objection.")
+        shown_grade = {k: grade.get(k) for k in ("verdict", "score", "feedback_ja", "feedback_en", "model_answer_ja")}
+        prompt = prompts.render(
+            prompts.DISCUSS_PROMPT,
+            **self._values(
+                game_title=game_title,
+                question=json.dumps(asdict(question), ensure_ascii=False, indent=1),
+                source_lines=format_dialogue(source_lines) or "(no source lines recorded)",
+                answer=answer,
+                grade=json.dumps(shown_grade, ensure_ascii=False, indent=1),
+                history=json.dumps(list(history), ensure_ascii=False, indent=1),
+                message=message.strip(),
+            ),
+        )
+        data = self._call(prompt, "session_review_discuss", GRADE_MAX_TOKENS)
+        revised = data.get("revised")
+        if isinstance(revised, dict):
+            verdict, score = _verdict_and_score(revised)
+            revised = {
+                "verdict": verdict,
+                "score": score,
+                "feedback_ja": str(revised.get("feedback_ja") or ""),
+                "feedback_en": str(revised.get("feedback_en") or ""),
+            }
+        else:
+            revised = None
+        return {
+            "reply_ja": str(data.get("reply_ja") or ""),
+            "reply_en": str(data.get("reply_en") or ""),
+            "revised": revised,
+        }
 
     # -- Whole pipeline ------------------------------------------------------
     def run(

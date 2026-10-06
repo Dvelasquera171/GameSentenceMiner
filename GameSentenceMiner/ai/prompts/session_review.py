@@ -24,6 +24,12 @@ _DATA_GUARD = (
 
 _JSON_GUARD = "Return ONLY a single JSON object. No markdown fences, no commentary before or after."
 
+_TRANSCRIPTION_NOTE = (
+    "The dialogue may come from automatic transcription (subtitles, OCR, speech recognition) and can contain "
+    "mistakes. If a line looks mis-transcribed (a word that makes no sense there, e.g. 聞いたね where 聞いてね "
+    "fits), say so plainly and work with the most likely intended words."
+)
+
 HIGHLIGHT_CATEGORIES = (
     "aspect_modality",  # 〜そうになる vs 〜そうだ, 〜てしまう, 〜ておく, 〜ところだった ...
     "omitted_subject",  # who is doing/feeling this
@@ -118,6 +124,7 @@ Write {count} questions in Japanese. The learner answers in Japanese. Mix these 
 
 Rules:
 - Every question must be answerable from the supplied material alone.
+- Do not build a question on a line that looks garbled or mis-transcribed (the text may come from automatic transcription).
 - Quote the relevant line(s) in the question when the question is about a phrase, and include their line_id in source_line_ids.
 - "reference_answer_ja" is a model answer in natural Japanese; "reference_answer_en" is its {native_language} rendering.
 - "rubric_en" lists the 1-3 facts an answer must contain to count as correct.
@@ -152,28 +159,72 @@ GRADE_PROMPT = """You are grading one answer from a JLPT N3 learner in a Japanes
 
 {data_guard}
 
-Judge the CONTENT against the rubric first; then separately note problems in the learner's Japanese. Be encouraging but precise. Do not add facts that are not in the source lines.
+{transcription_note} Never lower the score because the learner was misled by such an error.
 
-- "verdict": "correct" if every rubric point is present, "partial" if some are, "incorrect" otherwise.
-- "score": 0-100.
-- "feedback_ja": 1-3 sentences in Japanese on the content (what was right, what was missing).
+Content:
+- Judge the answer against the rubric. Interpretations must rest on the dialogue shown: do not attribute feelings or intentions the lines do not show. Accept any reasonable reading that fits the context, even if it differs from the reference answer.
+- "verdict": "correct" if every rubric point is present; "partial" if at least one is, or the answer points in the right direction; "incorrect" only if none is.
+- "score": 0-100, consistent with the verdict (correct 80-100, partial 30-79, incorrect 0-29).
+- "feedback_ja": 1-3 sentences in Japanese on the content: what was right, what was missing.
 - "feedback_en": the same in {native_language}, plus the reasoning a tutor would give.
-- "japanese_fixes": corrections to the learner's Japanese itself (grammar, word choice), each as {"original": "...", "fixed": "...", "note_en": "..."}. Empty list if nothing to fix.
-- "model_answer_ja": a model answer in natural Japanese.
+- "model_answer_ja": a short model answer in natural Japanese that the dialogue supports.
+
+The learner's Japanese, separately from the content:
+- "japanese_fixes": real problems in the learner's own wording only: grammar mistakes, or words a native speaker would not use there (e.g. 楽な雰囲気 → 気楽な雰囲気). Each is {"original": the learner's exact words, "fixed": those words corrected, "note_en": why, saying whether it is a mistake or a more natural choice}. Never put a better answer here; content belongs in the feedback. Empty list if the Japanese is fine.
+
+Questions from the learner:
+- If the answer also asks something (for example "explain the grammar of …"), grade only the part that answers the quiz question, and answer the learner's question in "reply_ja" (Japanese an N3 learner can read) and "reply_en". Otherwise leave both empty.
 
 {json_guard}
 Schema:
 {"verdict": "correct|partial|incorrect", "score": 0, "feedback_ja": "string", "feedback_en": "string",
-  "japanese_fixes": [{"original": "string", "fixed": "string", "note_en": "string"}], "model_answer_ja": "string"}
+  "japanese_fixes": [{"original": "string", "fixed": "string", "note_en": "string"}], "model_answer_ja": "string",
+  "reply_ja": "string", "reply_en": "string"}
 
 Question (JSON):
 {question}
 
-Source lines:
+Dialogue (the question is about the lines in its source_line_ids; the others are context):
 {source_lines}
 
 Learner's answer:
 {answer}
+"""
+
+DISCUSS_PROMPT = """You are a Japanese tutor. A JLPT N3 learner has a question about, or disagrees with, the grading of their quiz answer about "{game_title}".
+
+{data_guard}
+
+{transcription_note}
+
+Reply to the learner's message honestly. If they are right that the grading was wrong or unfair, say so and give a revised grade; if it was fair, explain why, kindly. Answer any grammar or vocabulary question they ask, at N3 level.
+
+- "reply_ja": your reply in Japanese an N3 learner can read.
+- "reply_en": the same in {native_language}.
+- "revised": null if the grade stands; otherwise {"verdict": "correct|partial|incorrect", "score": 0-100, "feedback_ja": "string", "feedback_en": "string"} (correct 80-100, partial 30-79, incorrect 0-29).
+
+{json_guard}
+Schema:
+{"reply_ja": "string", "reply_en": "string",
+  "revised": null}
+
+Question (JSON):
+{question}
+
+Dialogue (the question is about the lines in its source_line_ids; the others are context):
+{source_lines}
+
+Learner's answer:
+{answer}
+
+Current grade (JSON):
+{grade}
+
+Earlier messages about this grade (JSON):
+{history}
+
+Learner's message:
+{message}
 """
 
 
@@ -186,6 +237,7 @@ def common_values(native_language: str) -> dict:
     return {
         "data_guard": _DATA_GUARD,
         "json_guard": _JSON_GUARD,
+        "transcription_note": _TRANSCRIPTION_NOTE,
         "native_language": native_language,
         "categories": ", ".join(HIGHLIGHT_CATEGORIES),
     }

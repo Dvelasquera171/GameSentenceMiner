@@ -169,6 +169,7 @@ def test_grade_stores_attempt(client, monkeypatch):
 
     monkeypatch.setattr(session_review_api, "build_generator", lambda logger: FakeGen())
     monkeypatch.setattr(session_review_api.GameLinesTable, "get", classmethod(lambda cls, lid: None))
+    monkeypatch.setattr(session_review_api.reading_sessions, "get_session_lines", lambda *_a: [])
 
     res = client.post(f"/api/review/reviews/{review.id}/grade", json={"question_id": "q1-1", "answer": "答え"})
     assert res.status_code == 200 and res.json["grade"]["verdict"] == "correct"
@@ -258,3 +259,98 @@ def test_toggle_session_starts_then_ends(client, monkeypatch):
 def test_toggle_session_without_game_is_400(client, monkeypatch):
     monkeypatch.setattr(session_review_api, "_current_game_key_and_name", lambda: ("", ""))
     assert client.post("/api/review/sessions/toggle", json={}).status_code == 400
+
+
+def test_grader_sees_three_lines_around_each_quoted_line(monkeypatch):
+    session = [_line(i, 100.0 + i, f"行{i}") for i in range(12)]
+    monkeypatch.setattr(session_review_api.reading_sessions, "get_session_lines", lambda *_a: session)
+    review = SimpleNamespace(game_key="g1", start_ts=0, end_ts=1000)
+    lines = session_review_api._grading_lines(review, ["l5", "l7"])
+    assert [ln.id for ln in lines] == [f"l{i}" for i in range(2, 11)]
+    assert [ln.id for ln in session_review_api._grading_lines(review, ["l0"])] == ["l0", "l1", "l2", "l3"]
+
+
+def test_grader_falls_back_to_the_quoted_lines_outside_the_session(monkeypatch):
+    monkeypatch.setattr(session_review_api.reading_sessions, "get_session_lines", lambda *_a: [])
+    monkeypatch.setattr(
+        session_review_api.GameLinesTable,
+        "get",
+        classmethod(lambda cls, lid: _line(9, 5.0, "x") if lid == "l9" else None),
+    )
+    review = SimpleNamespace(game_key="g1", start_ts=0, end_ts=10)
+    assert [ln.id for ln in session_review_api._grading_lines(review, ["l9", "gone"])] == ["l9"]
+
+
+def _graded_attempt(review_id, grade=None):
+    attempt = SessionQuizAttemptsTable(
+        review_id=review_id,
+        question_id="q1-4",
+        answer="楽な雰囲気",
+        grade=grade or {"verdict": "partial", "score": 60, "feedback_ja": "元の講評"},
+    )
+    attempt.save()
+    return attempt
+
+
+def test_discuss_revises_the_grade_and_keeps_the_original(client, monkeypatch):
+    _configured(monkeypatch)
+    monkeypatch.setattr(session_review_api.reading_sessions, "get_session_lines", lambda *_a: [])
+    monkeypatch.setattr(session_review_api.GameLinesTable, "get", classmethod(lambda cls, lid: None))
+    review = SessionReviewsTable(
+        game_key="g1",
+        game_name="Azumanga Daioh",
+        start_ts=0,
+        end_ts=10,
+        status="done",
+        quiz=[{"id": "q1-4", "kind": "register", "question_ja": "?", "source_line_ids": ["l1"]}],
+    )
+    review.save()
+    attempt = _graded_attempt(review.id)
+    replies = iter(
+        [
+            {
+                "reply_ja": "その通り、字幕の誤りです。",
+                "reply_en": "Right.",
+                "revised": {"verdict": "partial", "score": 75, "feedback_ja": "直した", "feedback_en": "fixed"},
+            },
+            {"reply_ja": "「てね」は依頼です。", "reply_en": "A request.", "revised": None},
+        ]
+    )
+    seen = []
+
+    class FakeGen:
+        def discuss_grade(self, question, answer, grade, history, message, source_lines, title):
+            seen.append((question.id, answer, grade.get("score"), list(history), message, title))
+            return next(replies)
+
+    monkeypatch.setattr(session_review_api, "build_generator", lambda logger: FakeGen())
+    url = f"/api/review/reviews/{review.id}/attempts/{attempt.id}/discuss"
+
+    first = client.post(url, json={"message": "「聞いたね」は字幕の誤りでは？"})
+    assert first.status_code == 200
+    grade = first.json["grade"]
+    assert (grade["verdict"], grade["score"], grade["feedback_ja"]) == ("partial", 75, "直した")
+    assert grade["original"] == {"verdict": "partial", "score": 60}
+
+    second = client.post(url, json={"message": "「てね」の文法は？"})
+    grade = second.json["grade"]
+    assert grade["score"] == 75 and grade["original"] == {"verdict": "partial", "score": 60}
+    assert [d["message"] for d in grade["discussion"]] == ["「聞いたね」は字幕の誤りでは？", "「てね」の文法は？"]
+    assert grade["discussion"][1]["revised"] is None
+    assert seen[1][3] == [{"message": "「聞いたね」は字幕の誤りでは？", "reply_ja": "その通り、字幕の誤りです。"}]
+    assert SessionQuizAttemptsTable.get(attempt.id).grade["score"] == 75
+
+
+def test_discuss_validates_input(client, monkeypatch):
+    _configured(monkeypatch)
+    review = SessionReviewsTable(game_key="g1", start_ts=0, end_ts=10, status="done", quiz=[{"id": "q1-4"}])
+    review.save()
+    attempt = _graded_attempt(review.id)
+    url = f"/api/review/reviews/{review.id}/attempts/{attempt.id}/discuss"
+    assert client.post(url, json={"message": "  "}).status_code == 400
+    assert (
+        client.post(
+            f"/api/review/reviews/{review.id + 99}/attempts/{attempt.id}/discuss", json={"message": "x"}
+        ).status_code
+        == 404
+    )

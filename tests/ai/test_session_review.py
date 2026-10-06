@@ -284,3 +284,106 @@ def test_run_applies_the_consistency_pass():
     result = gen.run(_lines(5, chars=30), "Game", question_count=2)
     assert result.highlights == []
     assert len(result.quiz) == 2 and result.quiz[0].source_line_ids == ["l0"]
+
+
+class _ScriptedAI:
+    """Returns one canned JSON reply and records the prompt."""
+
+    def __init__(self, reply: dict):
+        self.reply = reply
+        self.prompts = []
+
+    def generate_raw_prompt(self, prompt, request_kind="raw", max_tokens=None):
+        self.prompts.append((request_kind, prompt))
+        return json.dumps(self.reply, ensure_ascii=False)
+
+
+_Q4 = sr.QuizQuestion(
+    id="q1-4",
+    kind="register",
+    question_ja="「分からないことは何でも聞いたね！」という言い方から、どんな雰囲気が伝わりますか？",
+    source_line_ids=["l1"],
+)
+_LINES = [
+    sr.ReviewLine(id="l0", text="新学期の授業を始めます"),
+    sr.ReviewLine(id="l1", text="分からないことは何でも聞いたね！"),
+]
+
+
+def test_grade_keeps_score_inside_the_verdict_band_and_answers_the_learners_question():
+    ai = _ScriptedAI(
+        {
+            "verdict": "incorrect",
+            "score": 60,
+            "feedback_ja": "f",
+            "feedback_en": "f",
+            "japanese_fixes": [
+                {"original": "楽な雰囲気", "fixed": "気楽な雰囲気", "note_en": "more natural"},
+                {"original": "not in the answer", "fixed": "x", "note_en": "invented"},
+                {"original": "伝わっている", "fixed": "伝わっている", "note_en": "no change"},
+            ],
+            "model_answer_ja": "m",
+            "reply_ja": "「聞いたね」は字幕の誤りで、「聞いてね」だと思います。",
+            "reply_en": "Probably a subtitle error for 聞いてね.",
+        }
+    )
+    grade = sr.SessionReviewGenerator(ai).grade_answer(
+        _Q4, "楽な雰囲気が伝わっている。「何でも聞いたね」の文法を説明してください。", _LINES, "Azumanga Daioh"
+    )
+    assert (grade.verdict, grade.score) == ("incorrect", 29)
+    assert [f["original"] for f in grade.japanese_fixes] == ["楽な雰囲気"]
+    assert grade.reply_ja.startswith("「聞いたね」")
+    prompt = ai.prompts[0][1]
+    assert "mis-transcribed" in prompt and "reply_ja" in prompt and "[l0]" in prompt
+
+
+@pytest.mark.parametrize(
+    ("verdict", "score", "expected"),
+    [
+        ("correct", 50, ("correct", 80)),
+        ("partial", 20, ("partial", 30)),
+        ("partial", 95, ("partial", 79)),
+        ("odd", 40, ("partial", 40)),
+    ],
+)
+def test_grade_score_bands(verdict, score, expected):
+    ai = _ScriptedAI({"verdict": verdict, "score": score})
+    assert (lambda g: (g.verdict, g.score))(
+        sr.SessionReviewGenerator(ai).grade_answer(_Q4, "答え", _LINES, "G")
+    ) == expected
+
+
+def test_discuss_can_revise_the_grade():
+    ai = _ScriptedAI(
+        {
+            "reply_ja": "その通りです。字幕の誤りでした。",
+            "reply_en": "You're right; it was a subtitle error.",
+            "revised": {"verdict": "partial", "score": 90, "feedback_ja": "直しました", "feedback_en": "revised"},
+        }
+    )
+    result = sr.SessionReviewGenerator(ai).discuss_grade(
+        _Q4,
+        "楽な雰囲気",
+        {"verdict": "incorrect", "score": 20, "feedback_ja": "x", "discussion": [{"secret": "not sent"}]},
+        [{"message": "前の質問", "reply_ja": "前の回答"}],
+        "「聞いたね」は字幕の誤りでは？",
+        _LINES,
+        "Azumanga Daioh",
+    )
+    assert result["revised"] == {
+        "verdict": "partial",
+        "score": 79,
+        "feedback_ja": "直しました",
+        "feedback_en": "revised",
+    }
+    kind, prompt = ai.prompts[0]
+    assert kind == "session_review_discuss"
+    assert "「聞いたね」は字幕の誤りでは？" in prompt and "前の質問" in prompt and "not sent" not in prompt
+
+
+def test_discuss_keeps_the_grade_when_it_stands_and_needs_a_message():
+    ai = _ScriptedAI({"reply_ja": "採点は妥当です。", "reply_en": "The grade stands.", "revised": None})
+    gen = sr.SessionReviewGenerator(ai)
+    assert gen.discuss_grade(_Q4, "a", {}, [], "なぜ？", _LINES, "G")["revised"] is None
+    with pytest.raises(ValueError):
+        gen.discuss_grade(_Q4, "a", {}, [], "  ", _LINES, "G")

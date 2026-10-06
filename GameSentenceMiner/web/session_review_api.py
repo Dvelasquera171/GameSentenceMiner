@@ -55,6 +55,34 @@ def _current_game_key_and_name() -> tuple[str, str]:
     return str(getattr(game, "id", "") or name), name
 
 
+GRADE_CONTEXT_LINES = 3
+
+
+def _quiz_question(raw_question: dict, question_id: str) -> QuizQuestion:
+    return QuizQuestion(
+        id=question_id,
+        kind=str(raw_question.get("kind") or ""),
+        question_ja=str(raw_question.get("question_ja") or ""),
+        hint_ja=str(raw_question.get("hint_ja") or ""),
+        reference_answer_ja=str(raw_question.get("reference_answer_ja") or ""),
+        reference_answer_en=str(raw_question.get("reference_answer_en") or ""),
+        rubric_en=list(raw_question.get("rubric_en") or []),
+        source_line_ids=[str(x) for x in (raw_question.get("source_line_ids") or [])],
+    )
+
+
+def _grading_lines(review: SessionReviewsTable, line_ids: List[str], radius: int = GRADE_CONTEXT_LINES):
+    """The quoted lines plus a few around each: the grader needs the scene, not one line."""
+    wanted = {str(lid) for lid in line_ids}
+    session = reading_sessions.get_session_lines(review.game_key, review.start_ts, review.end_ts)
+    positions = [i for i, row in enumerate(session) if str(row.id) in wanted]
+    if not positions:
+        rows = (GameLinesTable.get(lid) for lid in line_ids)
+        return [ReviewLine.from_game_line(row) for row in rows if row is not None]
+    keep = sorted({j for p in positions for j in range(max(0, p - radius), min(len(session), p + radius + 1))})
+    return [ReviewLine.from_game_line(session[j]) for j in keep]
+
+
 def _review_lines(review: SessionReviewsTable) -> List[ReviewLine]:
     rows = reading_sessions.get_session_lines(review.game_key, review.start_ts, review.end_ts)
     return [ReviewLine.from_game_line(r) for r in rows]
@@ -302,21 +330,8 @@ def register_session_review_routes(app):
             return jsonify({"error": "Unknown question"}), 404
         if not get_config().ai.is_configured():
             return jsonify(ai_setup_required(automatic=False)), 400
-        question = QuizQuestion(
-            id=question_id,
-            kind=str(raw_question.get("kind") or ""),
-            question_ja=str(raw_question.get("question_ja") or ""),
-            hint_ja=str(raw_question.get("hint_ja") or ""),
-            reference_answer_ja=str(raw_question.get("reference_answer_ja") or ""),
-            reference_answer_en=str(raw_question.get("reference_answer_en") or ""),
-            rubric_en=list(raw_question.get("rubric_en") or []),
-            source_line_ids=[str(x) for x in (raw_question.get("source_line_ids") or [])],
-        )
-        source_lines = [
-            ReviewLine.from_game_line(row)
-            for row in (GameLinesTable.get(lid) for lid in question.source_line_ids)
-            if row is not None
-        ]
+        question = _quiz_question(raw_question, question_id)
+        source_lines = _grading_lines(review, question.source_line_ids)
         try:
             grade = build_generator(logger).grade_answer(question, answer, source_lines, review.game_name)
         except Exception as exc:
@@ -326,6 +341,54 @@ def register_session_review_routes(app):
         )
         attempt.save()
         return jsonify({"grade": vars(grade), "attempt_id": attempt.id}), 200
+
+    @app.route("/api/review/reviews/<int:review_id>/attempts/<int:attempt_id>/discuss", methods=["POST"])
+    def review_discuss(review_id: int, attempt_id: int):
+        """質問・異議: the learner asks about a grade; the AI replies and may revise it."""
+        message = str((request.get_json(silent=True) or {}).get("message") or "").strip()
+        if not message or len(message) > 2000:
+            return jsonify({"error": "A message of 1-2000 characters is required"}), 400
+        review = SessionReviewsTable.get(review_id)
+        attempt = SessionQuizAttemptsTable.get(attempt_id)
+        if review is None or attempt is None or attempt.review_id != review_id:
+            return jsonify({"error": "Answer not found"}), 404
+        raw_question = next((q for q in review.quiz if str(q.get("id")) == attempt.question_id), None)
+        if raw_question is None:
+            return jsonify({"error": "Unknown question"}), 404
+        if not get_config().ai.is_configured():
+            return jsonify(ai_setup_required(automatic=False)), 400
+        question = _quiz_question(raw_question, attempt.question_id)
+        grade = dict(attempt.grade or {})
+        history = list(grade.get("discussion") or [])
+        try:
+            result = build_generator(logger).discuss_grade(
+                question,
+                attempt.answer,
+                grade,
+                [{"message": d.get("message"), "reply_ja": d.get("reply_ja")} for d in history],
+                message,
+                _grading_lines(review, question.source_line_ids),
+                review.game_name,
+            )
+        except Exception as exc:
+            return jsonify({"error": ai_error_message(exc), "code": "ai_request_failed"}), 502
+        revised = result.get("revised")
+        if revised:
+            grade.setdefault("original", {"verdict": grade.get("verdict"), "score": grade.get("score")})
+            grade.update(revised)
+        history.append(
+            {
+                "message": message,
+                "reply_ja": result.get("reply_ja", ""),
+                "reply_en": result.get("reply_en", ""),
+                "revised": revised,
+                "at": time.time(),
+            }
+        )
+        grade["discussion"] = history
+        attempt.grade = grade
+        attempt.save()
+        return jsonify({"grade": grade, "attempt_id": attempt.id}), 200
 
     # Exposed for tests and for a future "retry failed review" button.
     app.config.setdefault("SESSION_REVIEW_STATUSES", (REVIEW_STATUS_RUNNING, REVIEW_STATUS_DONE, REVIEW_STATUS_FAILED))

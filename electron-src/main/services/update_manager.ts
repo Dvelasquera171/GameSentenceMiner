@@ -1,4 +1,5 @@
 import { app, dialog, Notification } from 'electron';
+import { spawn } from 'node:child_process';
 import electronUpdater, { type AppUpdater } from 'electron-updater';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -9,8 +10,16 @@ import {
     APP_NAME,
     BASE_DIR,
     PACKAGE_NAME,
+    isPrivateDistribution,
 } from '../util.js';
-import { getPullPreReleases, getPythonExtras, setPythonExtras } from '../store.js';
+import { getPrivateUpdatesFolder, getPullPreReleases, getPythonExtras, setPythonExtras } from '../store.js';
+import {
+    isNewerVersion,
+    readPrivateRelease,
+    resolveReleasesFolder,
+    stageInstaller,
+    type PrivateRelease,
+} from '../distribution.js';
 import { checkForUpdates } from '../update_checker.js';
 import {
     checkAndInstallUV,
@@ -796,6 +805,14 @@ export class UpdateManager {
         this.emitAppUpdateStatus();
 
         try {
+            if (isPrivateDistribution()) {
+                const candidate = this.privateReleaseCandidate();
+                const latestVersion = candidate?.release.version ?? null;
+                const available = Boolean(latestVersion && isNewerVersion(latestVersion, app.getVersion()));
+                log.info(`[Updater] private build: current=${app.getVersion()} folder=${latestVersion ?? 'none'} available=${available}`);
+                this.appStatusCache = this.createAppStatus(latestVersion, available);
+                return this.appStatusCache;
+            }
             log.info('Checking for application updates...');
             const autoUpdater = this.configureAutoUpdater(forceUpdate);
             const result = await autoUpdater.checkForUpdates();
@@ -904,6 +921,10 @@ export class UpdateManager {
         this.appStatusCache = { ...status, checking: false, error: null };
         this.emitAppUpdateStatus();
         try {
+            if (isPrivateDistribution()) {
+                await this.installPrivateRelease(status);
+                return true;
+            }
             const autoUpdater = this.configureAutoUpdater(forceDev);
             log.info(`[Updater] Starting download: current=${status.currentVersion}, target=${status.latestVersion}, channel=${status.channel}`);
             await autoUpdater.downloadUpdate();
@@ -913,6 +934,35 @@ export class UpdateManager {
             this.failAppUpdate(error);
             throw error;
         }
+    }
+
+    private privateReleaseCandidate(): { folder: string; release: PrivateRelease } | null {
+        const folder = resolveReleasesFolder(getPrivateUpdatesFolder());
+        if (!folder) {
+            throw new Error('No releases folder: set one under Settings, or set up OneDrive.');
+        }
+        const release = readPrivateRelease(folder);
+        return release ? { folder, release } : null;
+    }
+
+    /** Private build: run the installer from the releases folder, silently, then start GSM again. */
+    private async installPrivateRelease(status: AppUpdateStatus): Promise<void> {
+        const candidate = this.privateReleaseCandidate();
+        if (!candidate || candidate.release.version !== status.latestVersion) {
+            throw new Error('The release in your releases folder changed. Check for updates again.');
+        }
+        const installer = stageInstaller(
+            candidate.folder,
+            candidate.release,
+            path.join(app.getPath('temp'), 'gsm-private-update')
+        );
+        await this.gsmUpdatePromise;
+        await this.deps.closeAllForAppUpdate();
+        fs.writeFileSync(path.join(BASE_DIR, 'update_python.flag'), '');
+        log.info(`[Updater] Installing private release ${candidate.release.version} from ${installer}`);
+        // The flags electron-updater gives the NSIS installer: silent, then relaunch GSM.
+        spawn(installer, ['/S', '--updated', '--force-run'], { detached: true, stdio: 'ignore' }).unref();
+        app.quit();
     }
 
     private failAppUpdate(error: unknown): void {

@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import log from "electron-log";
 import { getPythonPath } from "./store.js";
+import { isPrivateDistribution } from "./util.js";
 import {
     getProjectPath,
 } from "./services/python_ops.js";
@@ -51,6 +52,10 @@ interface PyPiPackageResponse {
 }
 
 async function getLatestCompatibleVersion(bundledVersion: string): Promise<string> {
+    if (isPrivateDistribution()) {
+        // Upstream's PyPI backend would replace this fork's; the bundled wheel is the only source.
+        return bundledVersion;
+    }
     try {
         const response = await fetch(`https://pypi.org/pypi/${PACKAGE_NAME}/json`, {
             signal: AbortSignal.timeout(5000),

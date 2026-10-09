@@ -31,7 +31,7 @@ function findOnlyWheel(wheelDir) {
   return wheelNames[0];
 }
 
-export function buildPreReleaseMetadata({ branch, commit, version, wheelPath, generatedAt }) {
+export function buildPreReleaseMetadata({ branch, commit, version, wheelPath, generatedAt, distribution }) {
   if (!branch || !commit || !version) {
     throw new Error('branch, commit, and version are required.');
   }
@@ -46,6 +46,8 @@ export function buildPreReleaseMetadata({ branch, commit, version, wheelPath, ge
     commit,
     version,
     generatedAt: generatedAt ?? new Date().toISOString(),
+    // "private": a fork build that must never take upstream installers or backends.
+    ...(distribution ? { distribution } : {}),
     backendWheel: {
       fileName,
       sha256,
@@ -61,7 +63,7 @@ function main() {
   const wheelDir = path.resolve(args['wheel-dir'] || 'electron-src/assets/python');
   const outputPath = path.resolve(args.out || 'electron-src/assets/prerelease.json');
   const wheelPath = path.join(wheelDir, findOnlyWheel(wheelDir));
-  const metadata = buildPreReleaseMetadata({ branch, commit, version, wheelPath });
+  const metadata = buildPreReleaseMetadata({ branch, commit, version, wheelPath, distribution: args.distribution });
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${JSON.stringify(metadata, null, 2)}\n`, 'utf8');

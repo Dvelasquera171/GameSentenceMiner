@@ -104,6 +104,7 @@ export function getResourcesDir(): string {
 
 interface PreReleaseMetadata {
     branch?: unknown;
+    distribution?: unknown;
     backendWheel?: {
         fileName?: unknown;
         sha256?: unknown;
@@ -129,6 +130,11 @@ function readPreReleaseMetadata(): PreReleaseMetadata | null {
         }
     }
     return null;
+}
+
+/** A private build of this fork (npm run release:private): never takes upstream updates. */
+export function isPrivateDistribution(): boolean {
+    return !isDev && readPreReleaseMetadata()?.distribution === 'private';
 }
 
 /** Return the source branch recorded in a packaged prerelease. */

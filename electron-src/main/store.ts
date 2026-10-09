@@ -176,6 +176,8 @@ interface StoreConfig {
     startConsoleMinimized: boolean;
     autoUpdateElectron: boolean;
     autoUpdateGSMApp: boolean;
+    // Private builds: folder with latest.json + installers (empty: OneDrive\GSM releases).
+    privateUpdatesFolder: string;
     customPythonPackage: string;
     pythonExtras: string[];
     windowTransparencyToolHotkey: string;
@@ -245,6 +247,7 @@ export const store = new Store<StoreConfig>({
         startConsoleMinimized: false,
         autoUpdateElectron: false,
         autoUpdateGSMApp: false,
+        privateUpdatesFolder: "",
         VN: {
             vns: [],
             textractorPath: "",
@@ -721,6 +724,14 @@ export function getAutoUpdateGSMApp(): boolean {
 
 export function setAutoUpdateGSMApp(autoUpdate: boolean): void {
     store.set("autoUpdateGSMApp", autoUpdate);
+}
+
+export function getPrivateUpdatesFolder(): string {
+    return store.get("privateUpdatesFolder") || "";
+}
+
+export function setPrivateUpdatesFolder(folder: string): void {
+    store.set("privateUpdatesFolder", String(folder || "").trim());
 }
 
 export function getAutoUpdateElectron(): boolean {

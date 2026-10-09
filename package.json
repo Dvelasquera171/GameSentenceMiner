@@ -22,6 +22,7 @@
     "dev:electron": "wait-on tcp:5173 dist/main/main.js && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 nodemon --exitcrash --watch dist/main --watch dist/preload --ext js,mjs,cjs --exec \"node scripts/electron-dev-once.cjs\"",
     "sync:legacy": "node electron-src/renderer/scripts/sync-legacy-assets.mjs",
     "test:ts": "vitest run --config vitest.config.ts",
+    "release:private": "node scripts/release-private.mjs",
     "test:connect": "node --test gsm_connect/tests/*.test.cjs",
     "test:ts:watch": "vitest --config vitest.config.ts",
     "build:native": "python -m pip install --disable-pip-version-check --no-deps -e .",

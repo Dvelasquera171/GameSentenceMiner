@@ -8,10 +8,15 @@ const mocks = vi.hoisted(() => ({
     getPullPreReleases: vi.fn(() => false),
     showMessageBox: vi.fn(),
     getInstalledPackageVersion: vi.fn(),
+    isPrivateDistribution: vi.fn(() => false),
+    getPrivateUpdatesFolder: vi.fn(() => ''),
+    spawn: vi.fn(() => ({ unref: vi.fn() })),
+    quit: vi.fn(),
 }));
 
+vi.mock('node:child_process', () => ({ spawn: mocks.spawn }));
 vi.mock('electron', () => ({
-    app: { getVersion: () => '2026.9.4' },
+    app: { getVersion: () => '2026.9.4', getPath: () => require('node:os').tmpdir(), quit: mocks.quit },
     dialog: { showMessageBox: mocks.showMessageBox, showErrorBox: vi.fn() },
     Notification: vi.fn(),
 }));
@@ -27,9 +32,15 @@ vi.mock('electron-updater', () => ({
 }));
 vi.mock('electron-log', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('electron-log/main.js', () => ({ default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock('../util.js', () => ({ APP_NAME: 'GSM', BASE_DIR: 'unused', PACKAGE_NAME: 'GameSentenceMiner' }));
+vi.mock('../util.js', () => ({
+    APP_NAME: 'GSM',
+    BASE_DIR: require('node:os').tmpdir(),
+    PACKAGE_NAME: 'GameSentenceMiner',
+    isPrivateDistribution: mocks.isPrivateDistribution,
+}));
 vi.mock('../store.js', () => ({
     getPullPreReleases: mocks.getPullPreReleases,
+    getPrivateUpdatesFolder: mocks.getPrivateUpdatesFolder,
     getPythonExtras: vi.fn(),
     setPythonExtras: vi.fn(),
 }));
@@ -154,5 +165,83 @@ describe('desktop update offers', () => {
         electronUpdater.autoUpdater.emit('error', new Error('Could not launch installer'));
         expect(manager.getAppUpdateStatus()).toMatchObject({ downloading: false, error: 'Could not launch installer' });
         expect(manager.anyUpdateInProgress).toBe(false);
+    });
+});
+
+describe('private builds update from the releases folder', () => {
+    const crypto = require('node:crypto') as typeof import('node:crypto');
+    const fs = require('node:fs') as typeof import('node:fs');
+    const os = require('node:os') as typeof import('node:os');
+    const path = require('node:path') as typeof import('node:path');
+    let folder: string;
+    let manager: UpdateManager;
+    const closeAllForAppUpdate = vi.fn();
+
+    function publish(version: string) {
+        const installer = `GameSentenceMiner-Setup-${version}.exe`;
+        const bytes = `installer ${version}`;
+        fs.writeFileSync(path.join(folder, installer), bytes);
+        fs.writeFileSync(
+            path.join(folder, 'latest.json'),
+            JSON.stringify({
+                version,
+                installer,
+                sha512: crypto.createHash('sha512').update(bytes).digest('hex'),
+                size: Buffer.byteLength(bytes),
+            })
+        );
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        folder = fs.mkdtempSync(path.join(os.tmpdir(), 'gsm-private-'));
+        mocks.isPrivateDistribution.mockReturnValue(true);
+        mocks.getPrivateUpdatesFolder.mockReturnValue(folder);
+        manager = new UpdateManager({
+            getPythonPath: () => '',
+            closeAllPythonProcesses: vi.fn(),
+            closeAllForAppUpdate,
+            ensureAndRunGSM: vi.fn(),
+            reinstallPython: vi.fn(),
+        });
+    });
+
+    it('offers a newer installer from the folder and never asks GitHub', async () => {
+        publish('2026.1008.1');
+        const status = await manager.checkAppUpdateStatus();
+        expect(status).toMatchObject({ latestVersion: '2026.1008.1', updateAvailable: true, error: null });
+        expect(mocks.checkForUpdates).not.toHaveBeenCalled();
+    });
+
+    it('ignores an installer that is not newer', async () => {
+        publish('2026.9.4');
+        expect(await manager.checkAppUpdateStatus()).toMatchObject({ updateAvailable: false });
+    });
+
+    it('runs the verified installer silently and quits', async () => {
+        publish('2026.1008.1');
+        await manager.installAppUpdate('2026.1008.1');
+        expect(closeAllForAppUpdate).toHaveBeenCalled();
+        expect(mocks.spawn).toHaveBeenCalledWith(
+            expect.stringContaining('GameSentenceMiner-Setup-2026.1008.1.exe'),
+            ['/S', '--updated', '--force-run'],
+            expect.objectContaining({ detached: true })
+        );
+        expect(mocks.quit).toHaveBeenCalled();
+        expect(mocks.downloadUpdate).not.toHaveBeenCalled();
+    });
+
+    it('reports a missing releases folder setting as an error', async () => {
+        mocks.getPrivateUpdatesFolder.mockReturnValue('');
+        const env = { ...process.env };
+        delete process.env.OneDrive;
+        delete process.env.OneDriveConsumer;
+        delete process.env.OneDriveCommercial;
+        try {
+            const status = await manager.checkAppUpdateStatus();
+            expect(status.error).toMatch(/releases folder/);
+        } finally {
+            process.env = env;
+        }
     });
 });

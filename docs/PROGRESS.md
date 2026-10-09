@@ -382,6 +382,18 @@ Owner graded an Azumanga Daioh session (WhisperAI subtitles). Problems seen and 
 6. `localhost:55000/review`: the video/series has its own sessions; Generate review works.
 7. Mine a word with Yomitan on the video: GSM must not add a game screenshot or audio to it.
 
+## 2026-10-08: Laptop setup: distribution and sync
+
+Plan, decisions and owner steps: [LAPTOP_SYNC.md](LAPTOP_SYNC.md).
+
+| What | Commit |
+|---|---|
+| `sync-relay/`: Cloudflare relay for GSM's built-in encrypted sync; GSM's interoperability tests pass on it (Node and workerd) | `3c0e4e9b` |
+| Private builds: `npm run release:private`, bundled fork wheel, updates only from the releases folder (no GitHub/PyPI) | `360a4d4f` |
+| Drossel bridge: reading sessions → Drossel "JP Immersion" sessions | `007fa09d` |
+
+Not done yet: wider settings sync (hotkeys, overlay, wizard choices), laptop checklist.
+
 ### Still open (next)
 - Owner test of GSM Connect (steps above); Firefox permanent install needs one signing step (README).
 - Owner test of today's changes (steps above).

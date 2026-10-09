@@ -1,0 +1,20 @@
+// GSM encrypted sync relay. Deploy steps: README.md next to this file.
+{
+  "name": "gsm-sync-relay",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-07-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "send_metrics": false,
+  // No request logging: bodies are ciphertext, but there is no reason to keep them anywhere else.
+  "observability": { "enabled": false },
+  "durable_objects": {
+    "bindings": [{ "name": "SYNC_ROOMS", "class_name": "SyncRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SyncRoom"] }],
+  "vars": {
+    // Encrypted events and transfers expire this long after upload (max 30 days).
+    "SYNC_RETENTION_SECONDS": "2592000"
+  }
+  // Secret, set with: npx wrangler secret put SYNC_TOKEN
+}

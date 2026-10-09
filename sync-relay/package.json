@@ -1,0 +1,16 @@
+{
+  "name": "gsm-sync-relay",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker relay for GSM's end-to-end encrypted device sync.",
+  "scripts": {
+    "test": "node --test tests/relay.test.mjs",
+    "serve": "node tests/serve-relay.mjs",
+    "dev": "wrangler dev --local --port 8798",
+    "check": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

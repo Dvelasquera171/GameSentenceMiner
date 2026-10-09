@@ -29,6 +29,18 @@ def build_advanced_tab(window: ConfigWindow, i18n: dict) -> QWidget:
     sync_button.clicked.connect(open_sync)
     layout.addRow("Device sync", sync_button)
 
+    drossel_button = QPushButton("Drossel…")
+
+    def open_drossel():
+        from GameSentenceMiner.ui.drossel_dialog import DrosselDialog
+
+        window._flush_pending_auto_save()
+        if window.save_settings(show_indicator=False, immediate_reload=True):
+            DrosselDialog(window).exec()
+
+    drossel_button.clicked.connect(open_drossel)
+    layout.addRow("Drossel pomodoro", drossel_button)
+
     note_label = QLabel(tabs_i18n.get("advanced", {}).get("player_note", "..."))
     note_label.setStyleSheet("color: red;")
     layout.addRow(note_label)

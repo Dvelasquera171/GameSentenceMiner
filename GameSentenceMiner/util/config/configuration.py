@@ -1330,6 +1330,9 @@ class Advanced:
     cloud_sync_push_batch_size: int = 5000
     cloud_sync_max_server_changes: int = 5000
     cloud_sync_timeout_seconds: int = 20
+    # Drossel pomodoro: publish GSM reading sessions as Drossel sessions (util/drossel_bridge.py).
+    drossel_reading_sync: bool = False
+    drossel_category: str = "JP Immersion"
 
     def __post_init__(self):
         # Preserve old behavior for configs that explicitly used -1 as

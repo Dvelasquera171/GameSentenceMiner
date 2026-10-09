@@ -1472,6 +1472,10 @@ class GSMApplication:
         if is_gsm_cloud_preview_enabled():
             gsm_cloud_auth_cache_service.start_background_loop()
         cloud_sync_service.start_background_loop()
+        from GameSentenceMiner.util import drossel_bridge
+
+        # Publishes reading sessions to Drossel every 10 minutes; idle unless enabled in Settings.
+        drossel_bridge.start_background_sync()
         self._start_thread(_get_run_text_hooker_page(), "texthooker-page")
         try:
             from GameSentenceMiner.util import yomitan_sync
